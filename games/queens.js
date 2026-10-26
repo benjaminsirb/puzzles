@@ -2,8 +2,8 @@ import { makeRng } from '../lib/rng.js';
 
 export const id = 'queens';
 export const name = 'Queens';
-export const sizes = [7, 8, 9];
-export const defaultSize = 8;
+export const levels = ['easy', 'medium', 'hard'];
+const SIZE = { easy: 7, medium: 8, hard: 9 };
 export const rules = 'Place exactly one queen in each row, column and colour region. Queens never touch, not even diagonally. Tap a cell once for an X and twice for a queen.';
 
 const PALETTE = ['#f7b8b8', '#fbd59f', '#f8f1a0', '#bfe8b5', '#aee0ee', '#c3c6f5', '#e8bdee', '#dccfbd', '#b2e8d6', '#f5c3df'];
@@ -131,18 +131,121 @@ function repair(n, region, cols, rng) {
   return false;
 }
 
-export function generate(seed, size) {
-  const n = size || defaultSize;
+// ---- Human-technique solver used for grading ----
+// Returns the hardest technique level needed (1 singles, 2 pointing, 3 subsets, 4 one-cell lookahead, 5 bifurcation)
+// plus how many level-4 steps were used, or null if the solver found a contradiction.
+function grade(n, region) {
+  const cand = Array.from({ length: n }, () => new Array(n).fill(true));
+  const queenRow = new Array(n).fill(-1);
+  const regionDone = new Array(n).fill(false), colDone = new Array(n).fill(false);
+  let level = 1, deep = 0, placed = 0;
+  const regionCells = Array.from({ length: n }, () => []);
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) regionCells[region[r][c]].push([r, c]);
+
+  const place = (r, c) => {
+    const g = region[r][c];
+    for (let k = 0; k < n; k++) { cand[r][k] = false; cand[k][c] = false; }
+    for (const [rr, cc] of regionCells[g]) cand[rr][cc] = false;
+    for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+      const rr = r + dr, cc = c + dc;
+      if (rr >= 0 && cc >= 0 && rr < n && cc < n) cand[rr][cc] = false;
+    }
+    queenRow[r] = c; regionDone[g] = true; colDone[c] = true; placed++;
+  };
+  const rowCands = (r) => { const out = []; for (let c = 0; c < n; c++) if (cand[r][c]) out.push([r, c]); return out; };
+  const colCands = (c) => { const out = []; for (let r = 0; r < n; r++) if (cand[r][c]) out.push([r, c]); return out; };
+  const regCands = (g) => regionCells[g].filter(([r, c]) => cand[r][c]);
+  const broken = () => {
+    for (let r = 0; r < n; r++) if (queenRow[r] < 0 && !rowCands(r).length) return true;
+    for (let c = 0; c < n; c++) if (!colDone[c] && !colCands(c).length) return true;
+    for (let g = 0; g < n; g++) if (!regionDone[g] && !regCands(g).length) return true;
+    return false;
+  };
+  // Level 1: a line with a single candidate.
+  const singles = () => {
+    for (let r = 0; r < n; r++) if (queenRow[r] < 0) { const cs = rowCands(r); if (cs.length === 1) { place(...cs[0]); return true; } }
+    for (let c = 0; c < n; c++) if (!colDone[c]) { const cs = colCands(c); if (cs.length === 1) { place(...cs[0]); return true; } }
+    for (let g = 0; g < n; g++) if (!regionDone[g]) { const cs = regCands(g); if (cs.length === 1) { place(...cs[0]); return true; } }
+    return false;
+  };
+  // Levels 2 and 3: k lines whose candidates fit inside k of another line type reserve those lines.
+  const subsets = (k) => {
+    let changed = false;
+    const groups = [
+      { items: [...Array(n).keys()].filter((g) => !regionDone[g]), cells: regCands, keyOf: ([r]) => r, keyCells: rowCands },
+      { items: [...Array(n).keys()].filter((g) => !regionDone[g]), cells: regCands, keyOf: ([, c]) => c, keyCells: colCands },
+      { items: [...Array(n).keys()].filter((r) => queenRow[r] < 0), cells: rowCands, keyOf: ([r, c]) => region[r][c], keyCells: regCands },
+      { items: [...Array(n).keys()].filter((c) => !colDone[c]), cells: colCands, keyOf: ([r, c]) => region[r][c], keyCells: regCands },
+    ];
+    const combos = (arr, k, start = 0, cur = []) => {
+      if (cur.length === k) return [cur.slice()];
+      const out = [];
+      for (let i = start; i < arr.length; i++) { cur.push(arr[i]); out.push(...combos(arr, k, i + 1, cur)); cur.pop(); }
+      return out;
+    };
+    for (const grp of groups) {
+      for (const combo of combos(grp.items, k)) {
+        const keys = new Set();
+        const own = new Set();
+        for (const it of combo) for (const cell of grp.cells(it)) { keys.add(grp.keyOf(cell)); own.add(cell[0] * n + cell[1]); }
+        if (keys.size !== k) continue;
+        for (const key of keys) for (const [r, c] of grp.keyCells(key)) {
+          if (!own.has(r * n + c)) { cand[r][c] = false; changed = true; }
+        }
+        if (changed) return true;
+      }
+    }
+    return changed;
+  };
+  // Level 4: a candidate whose placement would empty some line.
+  const lookahead = () => {
+    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
+      if (!cand[r][c]) continue;
+      const snapshot = cand.map((row) => row.slice());
+      const qr = queenRow.slice(), rd = regionDone.slice(), cd = colDone.slice(), p = placed;
+      place(r, c);
+      const bad = broken();
+      for (let i = 0; i < n; i++) { cand[i] = snapshot[i]; queenRow[i] = qr[i]; regionDone[i] = rd[i]; colDone[i] = cd[i]; }
+      placed = p;
+      if (bad) { cand[r][c] = false; return true; }
+    }
+    return false;
+  };
+
+  for (let guard = 0; guard < 500; guard++) {
+    if (placed === n) return { level, deep };
+    if (broken()) return null;
+    if (singles()) continue;
+    if (subsets(1)) { level = Math.max(level, 2); continue; }
+    if (subsets(2) || subsets(3)) { level = Math.max(level, 3); continue; }
+    if (lookahead()) { level = 4; deep++; continue; }
+    return { level: 5, deep };
+  }
+  return null;
+}
+
+const FITS = {
+  easy: (g) => g.level <= 2,
+  medium: (g) => g.level === 3 || (g.level === 4 && g.deep <= 2),
+  hard: (g) => g.level === 4 && g.deep >= 3,
+};
+
+export function generate(seed, diff = 'medium') {
+  const n = SIZE[diff] || SIZE.medium;
   const rng = makeRng(seed);
   let last = null;
-  for (let t = 0; t < 200; t++) {
+  for (let t = 0; t < 400; t++) {
     const cols = placeQueens(n, rng);
     const region = growRegions(n, cols, rng);
-    last = { n, region, solution: cols, tries: t + 1 };
-    if (repair(n, region, cols, rng)) return last;
+    if (!repair(n, region, cols, rng)) continue;
+    const g = grade(n, region);
+    last = { n, diff, region, solution: cols, grade: g, tries: t + 1 };
+    if (g && FITS[diff](g)) return last;
   }
   return last;
 }
+
+export { grade as _grade };
 
 export function mount(root, puzzle, api, saved) {
   const { n, region } = puzzle;

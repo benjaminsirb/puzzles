@@ -2,8 +2,7 @@ import { makeRng } from '../lib/rng.js';
 
 export const id = 'tango';
 export const name = 'Tango';
-export const sizes = null;
-export const defaultSize = 6;
+export const levels = ['easy', 'medium', 'hard'];
 export const rules = 'Fill the grid with suns and moons so each row and column holds three of each. No more than two of the same symbol may sit next to each other. Cells joined by = match; cells joined by × differ. Tap to cycle a cell.';
 
 const N = 6;
@@ -67,28 +66,115 @@ function fillRandom(rng) {
   return g;
 }
 
-export function generate(seed) {
+// ---- Human-technique solver used for grading ----
+// Level 1: direct rules (pairs, gaps, counts, = and x). Level 2: one-cell lookahead. Level 3: needs bifurcation.
+function grade(given, cons) {
+  const g = given.slice();
+  const other = (v) => 3 - v;
+  const setv = (i, v) => { if (g[i] && g[i] !== v) throw 0; g[i] = v; };
+  const at = (r, c) => (r < 0 || c < 0 || r >= N || c >= N ? 0 : g[r * N + c]);
+  const direct = () => {
+    let changed = false;
+    const lines = [];
+    for (let k = 0; k < N; k++) { lines.push([...Array(N).keys()].map((c) => k * N + c)); lines.push([...Array(N).keys()].map((r) => r * N + k)); }
+    for (const line of lines) {
+      for (let k = 0; k < N - 1; k++) {
+        const a = g[line[k]], b = g[line[k + 1]];
+        if (a && a === b) {
+          if (k > 0 && !g[line[k - 1]]) { setv(line[k - 1], other(a)); changed = true; }
+          if (k + 2 < N && !g[line[k + 2]]) { setv(line[k + 2], other(a)); changed = true; }
+        }
+        if (k + 2 < N) { const c2 = g[line[k + 2]]; if (a && a === c2 && !g[line[k + 1]]) { setv(line[k + 1], other(a)); changed = true; } }
+      }
+      for (const v of [1, 2]) {
+        const cnt = line.filter((i) => g[i] === v).length;
+        if (cnt > N / 2) throw 0;
+        if (cnt === N / 2) for (const i of line) if (!g[i]) { setv(i, other(v)); changed = true; }
+      }
+    }
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+      const i = r * N + c;
+      const pairs = [];
+      if (cons.right[r][c]) pairs.push([cons.right[r][c], i + 1]);
+      if (cons.down[r][c]) pairs.push([cons.down[r][c], i + N]);
+      for (const [t, j] of pairs) {
+        const a = g[i], b = g[j];
+        if (a && b) { if (t === 'eq' ? a !== b : a === b) throw 0; continue; }
+        if (a && !b) { setv(j, t === 'eq' ? a : other(a)); changed = true; }
+        else if (!a && b) { setv(i, t === 'eq' ? b : other(b)); changed = true; }
+      }
+    }
+    // a triple anywhere is a contradiction
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+      const v = at(r, c); if (!v) continue;
+      if (at(r, c + 1) === v && at(r, c + 2) === v) throw 0;
+      if (at(r + 1, c) === v && at(r + 2, c) === v) throw 0;
+    }
+    return changed;
+  };
+  const propagate = () => { while (direct()) { /* keep going */ } };
+  let level = 1, deep = 0;
+  for (let guard = 0; guard < 200; guard++) {
+    try { propagate(); } catch { return null; }
+    if (g.every(Boolean)) return { level, deep };
+    // Level 2: a value that leads to a contradiction under direct rules is eliminated.
+    let found = false;
+    for (let i = 0; i < N * N && !found; i++) {
+      if (g[i]) continue;
+      for (const v of [1, 2]) {
+        const save = g.slice();
+        g[i] = v;
+        let bad = false;
+        try { propagate(); } catch { bad = true; }
+        for (let k = 0; k < N * N; k++) g[k] = save[k];
+        if (bad) { g[i] = other(v); found = true; level = Math.max(level, 2); deep++; break; }
+      }
+    }
+    if (!found) return { level: 3, deep };
+  }
+  return null;
+}
+
+const FITS = {
+  easy: (g) => g.level === 1,
+  medium: (g) => g.level === 2 && g.deep <= 3,
+  hard: (g) => g.level === 2 && g.deep >= 4,
+};
+
+export function generate(seed, diff = 'medium') {
   const rng = makeRng(seed);
-  const full = fillRandom(rng);
-  const cons = makeCons();
-  const pairs = [];
-  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
-    if (c < N - 1) pairs.push(['right', r, c]);
-    if (r < N - 1) pairs.push(['down', r, c]);
+  let last = null;
+  for (let t = 0; t < 300; t++) {
+    const full = fillRandom(rng);
+    const cons = makeCons();
+    const pairs = [];
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+      if (c < N - 1) pairs.push(['right', r, c]);
+      if (r < N - 1) pairs.push(['down', r, c]);
+    }
+    rng.shuffle(pairs);
+    const nCons = diff === 'easy' ? 6 + rng.int(4) : diff === 'medium' ? 4 + rng.int(4) : 2 + rng.int(4);
+    for (const [d, r, c] of pairs.slice(0, nCons)) {
+      const o = d === 'right' ? full[r * N + c + 1] : full[(r + 1) * N + c];
+      cons[d][r][c] = o === full[r * N + c] ? 'eq' : 'ne';
+    }
+    // Strip givens to a minimal unique set.
+    const given = full.slice();
+    const order = rng.shuffle([...Array(N * N).keys()]);
+    for (const i of order) { const v = given[i]; given[i] = 0; if (countSolutions(given, cons) !== 1) given[i] = v; }
+    if (diff === 'easy') {
+      // Add givens back until direct rules alone solve it.
+      for (const i of order) {
+        const g = grade(given, cons);
+        if (g && g.level === 1) break;
+        if (!given[i]) given[i] = full[i];
+      }
+    }
+    const g = grade(given, cons);
+    last = { n: N, diff, given, cons, solution: full, grade: g, tries: t + 1 };
+    if (g && FITS[diff](g)) return last;
   }
-  rng.shuffle(pairs);
-  const nCons = 4 + rng.int(5);
-  for (const [d, r, c] of pairs.slice(0, nCons)) {
-    const other = d === 'right' ? full[r * N + c + 1] : full[(r + 1) * N + c];
-    cons[d][r][c] = other === full[r * N + c] ? 'eq' : 'ne';
-  }
-  const given = full.slice();
-  for (const i of rng.shuffle([...Array(N * N).keys()])) {
-    const v = given[i];
-    given[i] = 0;
-    if (countSolutions(given, cons) !== 1) given[i] = v;
-  }
-  return { n: N, given, cons, solution: full };
+  return last;
 }
 
 export function mount(root, puzzle, api, saved) {

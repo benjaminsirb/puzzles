@@ -2,8 +2,8 @@ import { makeRng } from '../lib/rng.js';
 
 export const id = 'zip';
 export const name = 'Zip';
-export const sizes = [6, 7];
-export const defaultSize = 6;
+export const levels = ['easy', 'medium', 'hard'];
+const SIZE = { easy: 6, medium: 6, hard: 7 };
 export const rules = 'Draw one path from 1 to the last number, visiting the numbers in order and every cell exactly once. Thick lines are walls. Drag to draw, drag back or tap a cell on the path to undo.';
 
 function randomHamPath(n, rng) {
@@ -86,12 +86,23 @@ function solutions(n, numAt, wallR, wallD, limit, budget) {
   return aborted ? null : out;
 }
 
-export function generate(seed, size) {
-  const n = size || defaultSize;
+// Search effort: how many DFS steps the pruned solver needs to find the solution. Proxy for how far ahead a player must plan.
+const EFFORT = { easy: 220, medium: 900 };
+function effortOf(n, numAt, wallR, wallD) {
+  let steps = 0;
+  const probe = (limit) => { const r = solutions(n, numAt, wallR, wallD, 1, limit); return r ? r.length : -1; };
+  let lo = 32;
+  while (lo < 400000 && probe(lo) < 1) lo *= 2;
+  steps = lo;
+  return steps;
+}
+
+export function generate(seed, diff = 'medium') {
+  const n = SIZE[diff] || SIZE.medium;
   const N = n * n;
   const rng = makeRng(seed);
   let last = null;
-  for (let attempt = 0; attempt < 40; attempt++) {
+  for (let attempt = 0; attempt < 80; attempt++) {
     const path = randomHamPath(n, rng);
     const wallR = Array.from({ length: n }, () => new Array(n).fill(false));
     const wallD = Array.from({ length: n }, () => new Array(n).fill(false));
@@ -120,7 +131,27 @@ export function generate(seed, size) {
       idx.forEach((p, i) => { numAt[path[p]] = i + 1; });
       last = { n, numAt, wallR, wallD, solution: path, count: idx.length };
       const sols = solutions(n, numAt, wallR, wallD, 2, 400000);
-      if (sols && sols.length === 1) return last;
+      if (sols && sols.length === 1) {
+        if (diff === 'easy') {
+          // Easy: two extra numbers in the longest gaps so less of the path has to be planned.
+          for (let e = 0; e < 2; e++) {
+            const ids = [...marks].sort((a, b) => a - b);
+            let best = 0, bi = 0;
+            for (let i = 0; i < ids.length - 1; i++) { const gap = ids[i + 1] - ids[i]; if (gap > best) { best = gap; bi = i; } }
+            if (best >= 4) marks.add(ids[bi] + Math.floor(best / 2));
+          }
+          const ids = [...marks].sort((a, b) => a - b);
+          const na = new Array(N).fill(0);
+          ids.forEach((p, i) => { na[path[p]] = i + 1; });
+          last = { n, diff, numAt: na, wallR, wallD, solution: path, count: ids.length, effort: effortOf(n, na, wallR, wallD) };
+          if (last.effort <= EFFORT.easy) return last;
+          break;
+        }
+        last.diff = diff;
+        last.effort = effortOf(n, numAt, wallR, wallD);
+        if (diff === 'medium' ? last.effort > EFFORT.easy && last.effort <= EFFORT.medium : last.effort > EFFORT.medium) return last;
+        break;
+      }
       // Greedy: try candidate cells where the alternate path diverges, keep the one that leaves fewest solutions.
       const alt = sols && sols.find((s) => s.some((cell, p) => cell !== path[p]));
       const cands = [];

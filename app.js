@@ -42,12 +42,14 @@ let tick = null;
 
 const key = (id) => 'puzzles.' + id;
 const randomSeed = () => Math.floor(Math.random() * 2 ** 31);
+const LEVELS = ['easy', 'medium', 'hard'];
+const label = (d) => d.charAt(0).toUpperCase() + d.slice(1);
 function load(id) { try { const s = localStorage.getItem(key(id)); return s ? JSON.parse(s) : null; } catch { return null; } }
 function save() {
   if (!current || current.replay) return;
   try {
     localStorage.setItem(key(current.game.id), JSON.stringify({
-      seed: current.seed, size: current.size, state: current.state, elapsed: current.elapsed, solved: current.solved,
+      seed: current.seed, diff: current.diff, state: current.state, elapsed: current.elapsed, solved: current.solved,
     }));
   } catch { /* storage unavailable */ }
 }
@@ -69,10 +71,10 @@ function pauseTimer() {
   clearInterval(tick); tick = null;
   save();
 }
-function cover(label) {
+function cover(text) {
   els.coverTitle.textContent = current.game.name;
-  els.coverSub.textContent = current.size ? current.size + '×' + current.size : '';
-  els.coverBtn.textContent = label;
+  els.coverSub.textContent = label(current.diff);
+  els.coverBtn.textContent = text;
   els.cover.hidden = false;
   els.board.classList.add('covered');
 }
@@ -133,12 +135,12 @@ function confetti() {
   requestAnimationFrame(frame);
 }
 
-function newPuzzle(game, seed, size, saved, replay) {
+function newPuzzle(game, seed, diff, saved, replay, ready) {
   pauseTimer();
   els.modal.hidden = true;
-  const puzzle = game.generate(seed, size);
+  const puzzle = ready || game.generate(seed, diff);
   current = {
-    game, puzzle, seed, size, replay: !!replay,
+    game, puzzle, seed, diff, replay: !!replay,
     state: replay ? game.solvedState(puzzle) : saved ? saved.state : null,
     elapsed: replay ? replay.ms : saved ? saved.elapsed || 0 : 0,
     solved: replay ? true : saved ? !!saved.solved : false, startedAt: null,
@@ -148,7 +150,7 @@ function newPuzzle(game, seed, size, saved, replay) {
   els.rules.textContent = game.rules;
   els.seed.textContent = replay
     ? 'Replay · solved in ' + fmt(replay.ms) + ' on ' + new Date(replay.at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' · #' + seed
-    : '#' + seed + (size ? ' · ' + size + '×' + size : '');
+    : '#' + seed + ' · ' + label(diff);
   const api = {
     onChange(state) {
       current.state = state;
@@ -157,7 +159,7 @@ function newPuzzle(game, seed, size, saved, replay) {
     onWin() {
       if (current.solved) return;
       pauseTimer(); current.solved = true; save(); renderTimer();
-      solves.add({ g: game.id, n: size || 0, seed, ms: Math.round(current.elapsed), at: Date.now() });
+      solves.add({ g: game.id, d: diff, seed, ms: Math.round(current.elapsed), at: Date.now() });
       els.board.classList.add('solved');
       celebrate(current.elapsed);
     },
@@ -173,15 +175,17 @@ function newPuzzle(game, seed, size, saved, replay) {
   save();
   if (current.solved) { els.cover.hidden = true; els.board.classList.remove('covered'); }
   else cover(current.elapsed > 0 ? 'Resume' : 'Start game');
+  if (!replay) prefetch(game);
 }
 
-// Size preference per game: 'random' (default) or a fixed size.
-const sizeKey = (id) => key(id) + '.sizeMode';
-const sizeMode = (game) => { const v = localStorage.getItem(sizeKey(game.id)); return v && (v === 'random' || game.sizes.includes(+v)) ? v : 'random'; };
-const resolveSize = (game) => {
-  if (!game.sizes) return null;
-  const mode = sizeMode(game);
-  return mode === 'random' ? game.sizes[Math.floor(Math.random() * game.sizes.length)] : +mode;
+// Difficulty preference per game: 'random' (default) or a fixed level.
+const diffKey = (id) => key(id) + '.diffMode';
+const diffMode = (game) => { const v = localStorage.getItem(diffKey(game.id)); return v && (v === 'random' || LEVELS.includes(v)) ? v : 'random'; };
+const resolveDiff = (game) => { const mode = diffMode(game); return mode === 'random' ? LEVELS[Math.floor(Math.random() * LEVELS.length)] : mode; };
+const fillSelect = (game) => {
+  els.size.hidden = false;
+  els.size.innerHTML = '<option value="random">Random</option>' + LEVELS.map((d) => `<option value="${d}">${label(d)}</option>`).join('');
+  els.size.value = diffMode(game);
 };
 
 const GLYPHS = {
@@ -218,30 +222,26 @@ function selectGame(id) {
   els.title.textContent = game.name;
   localStorage.setItem('puzzles.current', game.id);
   if (location.hash !== '#' + game.id) history.replaceState(null, '', '#' + game.id);
-  if (game.sizes) {
-    els.size.hidden = false;
-    els.size.innerHTML = '<option value="random">Random</option>' + game.sizes.map((s) => `<option value="${s}">${s}×${s}</option>`).join('');
-    els.size.value = sizeMode(game);
-  } else els.size.hidden = true;
+  fillSelect(game);
   // Resume only a game that is started and unfinished; otherwise start fresh.
   const saved = load(game.id);
-  const inProgress = saved && saved.seed != null && !saved.solved && saved.elapsed > 0 && (!game.sizes || game.sizes.includes(saved.size));
-  if (inProgress) newPuzzle(game, saved.seed, saved.size, saved);
-  else newPuzzle(game, randomSeed(), resolveSize(game), null);
+  const inProgress = saved && saved.seed != null && !saved.solved && saved.elapsed > 0 && LEVELS.includes(saved.diff);
+  if (inProgress) newPuzzle(game, saved.seed, saved.diff, saved);
+  else newPuzzle(game, randomSeed(), resolveDiff(game), null);
 }
 
 // Show a past solve on its board, without touching the in-progress game.
 function replaySolve(entry) {
   const game = GAMES.find((g) => g.id === entry.g);
-  if (!game) return;
-  if (game.sizes && !game.sizes.includes(entry.n)) return;
+  if (!game || !LEVELS.includes(entry.d)) return;
   els.results.hidden = true;
   els.home.hidden = true; els.gameView.hidden = false;
   els.homeBtn.hidden = false; els.statsHome.hidden = true;
   els.title.textContent = game.name;
   if (location.hash !== '#' + game.id) history.replaceState(null, '', '#' + game.id);
-  if (game.sizes) { els.size.hidden = false; els.size.innerHTML = '<option value="random">Random</option>' + game.sizes.map((s) => `<option value="${s}">${s}×${s}</option>`).join(''); els.size.value = String(entry.n); } else els.size.hidden = true;
-  newPuzzle(game, entry.seed, game.sizes ? entry.n : null, null, { ms: entry.ms, at: entry.at });
+  fillSelect(game);
+  els.size.value = entry.d;
+  newPuzzle(game, entry.seed, entry.d, null, { ms: entry.ms, at: entry.at });
 }
 
 function route() {
@@ -252,7 +252,21 @@ function route() {
 els.homeBtn.onclick = () => { location.hash = ''; };
 els.statsHome.onclick = () => openResults(localStorage.getItem('puzzles.current') || 'queens');
 
-els.newBtn.onclick = () => newPuzzle(current.game, randomSeed(), resolveSize(current.game), null);
+// Generate the next puzzle ahead of time so New never waits on the generator.
+const prefetched = {};
+function prefetch(game) {
+  const diff = resolveDiff(game);
+  const seed = randomSeed();
+  setTimeout(() => { if (!prefetched[game.id] || prefetched[game.id].diff !== diff) prefetched[game.id] = { seed, diff, puzzle: game.generate(seed, diff) }; }, 60);
+}
+function takePrefetched(game) {
+  const diff = resolveDiff(game);
+  const p = prefetched[game.id];
+  delete prefetched[game.id];
+  return p && p.diff === diff ? p : { seed: randomSeed(), diff, puzzle: null };
+}
+// New starts at once; the Start card only greets arrivals from the home page.
+els.newBtn.onclick = () => { const p = takePrefetched(current.game); newPuzzle(current.game, p.seed, p.diff, null, null, p.puzzle); uncover(); };
 els.modalNew.onclick = els.newBtn.onclick;
 els.modalClose.onclick = () => { els.modal.hidden = true; };
 els.modalResults.onclick = () => { els.modal.hidden = true; openResults(current.game.id); };
@@ -261,13 +275,13 @@ els.rClose.onclick = () => { els.results.hidden = true; };
 els.results.addEventListener('click', (e) => { if (e.target === els.results) els.results.hidden = true; });
 els.rClear.onclick = () => { if (confirm('Delete all recorded solve times?')) { solves.clear(); renderResults(); } };
 els.modal.addEventListener('click', (e) => { if (e.target === els.modal) els.modal.hidden = true; });
-els.size.onchange = () => { localStorage.setItem(sizeKey(current.game.id), els.size.value); newPuzzle(current.game, randomSeed(), resolveSize(current.game), null); };
+els.size.onchange = () => { localStorage.setItem(diffKey(current.game.id), els.size.value); delete prefetched[current.game.id]; newPuzzle(current.game, randomSeed(), resolveDiff(current.game), null); uncover(); };
 window.addEventListener('hashchange', route);
 
 // ---- Results view ----
-let rSel = { game: 'queens', size: null };
+let rSel = { game: 'queens', diff: 'all' };
 function openResults(gameId) {
-  rSel = { game: gameId, size: 'all' };
+  rSel = { game: gameId, diff: 'all' };
   els.results.hidden = false;
   renderResults();
 }
@@ -278,15 +292,12 @@ function pill(label, active, fn) {
 function renderResults() {
   const game = GAMES.find((g) => g.id === rSel.game);
   els.rGames.innerHTML = '';
-  for (const g of GAMES) els.rGames.appendChild(pill(g.name, g.id === rSel.game, () => { rSel = { game: g.id, size: 'all' }; renderResults(); }));
+  for (const g of GAMES) els.rGames.appendChild(pill(g.name, g.id === rSel.game, () => { rSel = { game: g.id, diff: 'all' }; renderResults(); }));
   els.rSizes.innerHTML = '';
-  if (game.sizes) {
-    if (rSel.size !== 'all' && !game.sizes.includes(rSel.size)) rSel.size = 'all';
-    els.rSizes.appendChild(pill('All sizes', rSel.size === 'all', () => { rSel.size = 'all'; renderResults(); }));
-    for (const n of game.sizes) els.rSizes.appendChild(pill(n + '×' + n, n === rSel.size, () => { rSel.size = n; renderResults(); }));
-  } else rSel.size = null;
-  const allSizes = !game.sizes || rSel.size === 'all';
-  const list = solves.filter(rSel.game, game.sizes ? (allSizes ? null : rSel.size) : 0);
+  els.rSizes.appendChild(pill('All', rSel.diff === 'all', () => { rSel.diff = 'all'; renderResults(); }));
+  for (const d of LEVELS) els.rSizes.appendChild(pill(label(d), d === rSel.diff, () => { rSel.diff = d; renderResults(); }));
+  const allLevels = rSel.diff === 'all';
+  const list = solves.filter(rSel.game, allLevels ? null : rSel.diff);
   const st = solves.stats(list);
   els.rTiles.innerHTML = '';
   for (const [k, v] of [['Solved', st ? st.count : 0], ['Best', st ? fmt(st.best) : '–'], ['Average', st ? fmt(st.avg) : '–'], ['Last 5', st ? fmt(st.last5) : '–']]) {
@@ -299,9 +310,10 @@ function renderResults() {
   for (const e of list.slice().reverse().slice(0, 50)) {
     const tr = document.createElement('tr');
     const d = new Date(e.at);
-    const sizeCol = game.sizes && allSizes ? `<td class="muted">${e.n}×${e.n}</td>` : '';
-    tr.innerHTML = `<td class="muted">${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} ${d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</td>${sizeCol}<td>${fmt(e.ms)}</td><td class="act"><button class="link small">View</button></td>`;
-    tr.querySelector('button').onclick = () => replaySolve(e);
+    const levelCol = allLevels ? `<td class="muted">${label(solves.levelOf(e))}</td>` : '';
+    const view = e.d ? '<button class="link small">View</button>' : '';
+    tr.innerHTML = `<td class="muted">${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} ${d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</td>${levelCol}<td>${fmt(e.ms)}</td><td class="act">${view}</td>`;
+    if (e.d) tr.querySelector('button').onclick = () => replaySolve(e);
     els.rTable.appendChild(tr);
   }
 }
@@ -343,7 +355,7 @@ function drawChart(list, st) {
     cross.setAttribute('x1', x(i)); cross.setAttribute('x2', x(i)); cross.style.display = '';
     const r = svg.getBoundingClientRect();
     const d = new Date(list[i].at);
-    els.rTip.textContent = fmt(list[i].ms) + (list[i].n ? ' · ' + list[i].n + '×' + list[i].n : '') + ' · ' + d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    els.rTip.textContent = fmt(list[i].ms) + ' · ' + label(solves.levelOf(list[i])) + ' · ' + d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
     els.rTip.style.left = (x(i) / W) * r.width + 'px';
     els.rTip.style.top = (y(secs[i]) / H) * r.height + 'px';
     els.rTip.hidden = false;

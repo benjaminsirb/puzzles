@@ -46,10 +46,10 @@
     const l = document.createElement('div'); l.className = 'label'; l.textContent = game.name; wrap.appendChild(l);
     document.querySelector('#boards').appendChild(wrap);
   };
-  show(queens, 445994524, 8, (p) => { const marks = new Array(64).fill(0); p.solution.slice(0, 3).forEach((c, r) => { marks[r * 8 + c] = 2; }); [11, 20, 27, 33].forEach((i) => { if (!marks[i]) marks[i] = 1; }); return { marks }; });
-  show(tango, 361247800, null, (p) => { const vals = p.given.slice(); [0, 1, 3, 7, 8, 13, 14, 19, 21, 26, 30].forEach((i) => { vals[i] = p.solution[i]; }); return { vals }; });
-  show(zip, 1223437120, 6, (p) => ({ path: p.solution.slice(0, 14) }));
-  show(patches, 358177393, 6, (p) => ({ patches: p.solution.slice(0, 3).map((rc, i) => ({ ...rc, ci: i })) }));
+  show(queens, 445994524, 'medium', (p) => { const marks = new Array(p.n * p.n).fill(0); p.solution.slice(0, 3).forEach((c, r) => { marks[r * p.n + c] = 2; }); [11, 20, 27, 33].forEach((i) => { if (!marks[i]) marks[i] = 1; }); return { marks }; });
+  show(tango, 361247800, 'medium', (p) => { const vals = p.given.slice(); [0, 1, 3, 7, 8, 13, 14, 19, 21, 26, 30].forEach((i) => { vals[i] = p.solution[i]; }); return { vals }; });
+  show(zip, 1223437120, 'medium', (p) => ({ path: p.solution.slice(0, 14) }));
+  show(patches, 358177393, 'medium', (p) => ({ patches: p.solution.slice(0, 3).map((rc, i) => ({ ...rc, ci: i })) }));
 </script>
 </body>
 </html>
