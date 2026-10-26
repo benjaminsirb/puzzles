@@ -162,6 +162,15 @@ function newPuzzle(game, seed, size, saved) {
   else cover(current.elapsed > 0 ? 'Resume' : 'Start game');
 }
 
+// Size preference per game: 'random' (default) or a fixed size.
+const sizeKey = (id) => key(id) + '.sizeMode';
+const sizeMode = (game) => { const v = localStorage.getItem(sizeKey(game.id)); return v && (v === 'random' || game.sizes.includes(+v)) ? v : 'random'; };
+const resolveSize = (game) => {
+  if (!game.sizes) return null;
+  const mode = sizeMode(game);
+  return mode === 'random' ? game.sizes[Math.floor(Math.random() * game.sizes.length)] : +mode;
+};
+
 function selectGame(id) {
   const game = GAMES.find((g) => g.id === id) || GAMES[0];
   localStorage.setItem('puzzles.current', game.id);
@@ -169,13 +178,12 @@ function selectGame(id) {
   for (const b of els.tabs.children) b.classList.toggle('active', b.dataset.id === game.id);
   if (game.sizes) {
     els.size.hidden = false;
-    els.size.innerHTML = game.sizes.map((s) => `<option value="${s}">${s}×${s}</option>`).join('');
+    els.size.innerHTML = '<option value="random">Random</option>' + game.sizes.map((s) => `<option value="${s}">${s}×${s}</option>`).join('');
+    els.size.value = sizeMode(game);
   } else els.size.hidden = true;
   const saved = load(game.id);
-  const size = game.sizes ? (saved && game.sizes.includes(saved.size) ? saved.size : game.defaultSize) : null;
-  if (game.sizes) els.size.value = size;
-  if (saved && saved.seed != null && (!game.sizes || saved.size === size)) newPuzzle(game, saved.seed, size, saved);
-  else newPuzzle(game, randomSeed(), size, null);
+  if (saved && saved.seed != null && (!game.sizes || game.sizes.includes(saved.size))) newPuzzle(game, saved.seed, saved.size, saved);
+  else newPuzzle(game, randomSeed(), resolveSize(game), null);
 }
 
 for (const g of GAMES) {
@@ -184,7 +192,7 @@ for (const g of GAMES) {
   b.onclick = () => selectGame(g.id);
   els.tabs.appendChild(b);
 }
-els.newBtn.onclick = () => newPuzzle(current.game, randomSeed(), current.size, null);
+els.newBtn.onclick = () => newPuzzle(current.game, randomSeed(), resolveSize(current.game), null);
 els.modalNew.onclick = els.newBtn.onclick;
 els.modalClose.onclick = () => { els.modal.hidden = true; };
 els.modalResults.onclick = () => { els.modal.hidden = true; openResults(current.game.id, current.size); };
@@ -193,7 +201,7 @@ els.rClose.onclick = () => { els.results.hidden = true; };
 els.results.addEventListener('click', (e) => { if (e.target === els.results) els.results.hidden = true; });
 els.rClear.onclick = () => { if (confirm('Delete all recorded solve times?')) { solves.clear(); renderResults(); } };
 els.modal.addEventListener('click', (e) => { if (e.target === els.modal) els.modal.hidden = true; });
-els.size.onchange = () => newPuzzle(current.game, randomSeed(), +els.size.value, null);
+els.size.onchange = () => { localStorage.setItem(sizeKey(current.game.id), els.size.value); newPuzzle(current.game, randomSeed(), resolveSize(current.game), null); };
 window.addEventListener('hashchange', () => { const id = location.hash.slice(1); if (id && id !== current.game.id) selectGame(id); });
 
 // ---- Results view ----
