@@ -14,3 +14,10 @@ Link preview image: `og/preview.html` renders four mini boards. Regenerate `og.p
 "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --hide-scrollbars --force-device-scale-factor=2 --window-size=1200,630 --screenshot=/tmp/og-raw.png http://127.0.0.1:8788/og/preview.html
 sips -z 630 1200 /tmp/og-raw.png --out og.png
 ```
+
+App icon: `og/icon.html` is the source. Regenerate with a local server on 8788:
+
+```
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --hide-scrollbars --window-size=1024,1024 --screenshot=/tmp/icon.png http://127.0.0.1:8788/og/icon.html
+for s in 180 192 512; do sips -z $s $s /tmp/icon.png --out icons/icon-$s.png; done
+```
