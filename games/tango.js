@@ -174,3 +174,5 @@ export function mount(root, puzzle, api, saved) {
   });
   render();
 }
+
+export function solvedState(puzzle) { return { vals: puzzle.solution.slice() }; }

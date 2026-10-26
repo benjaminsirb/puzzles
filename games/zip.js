@@ -233,3 +233,5 @@ export function mount(root, puzzle, api, saved) {
   api.addAction('Clear', () => { if (api.isSolved()) return; path = []; commit(); });
   render();
 }
+
+export function solvedState(puzzle) { return { path: puzzle.solution.slice() }; }

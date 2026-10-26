@@ -228,3 +228,5 @@ export function mount(root, puzzle, api, saved) {
   api.addAction('Clear', () => { if (api.isSolved()) return; patches = []; commit(); });
   render();
 }
+
+export function solvedState(puzzle) { return { patches: puzzle.solution.map((rc, i) => ({ ...rc, ci: i })) }; }

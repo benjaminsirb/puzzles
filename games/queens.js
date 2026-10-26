@@ -223,3 +223,10 @@ export function mount(root, puzzle, api, saved) {
   toggle.textContent = 'Auto-X: ' + (autoX ? 'on' : 'off');
   render();
 }
+
+// State that shows the solved board, used for replays.
+export function solvedState(puzzle) {
+  const marks = new Array(puzzle.n * puzzle.n).fill(0);
+  puzzle.solution.forEach((c, r) => { marks[r * puzzle.n + c] = 2; });
+  return { marks };
+}

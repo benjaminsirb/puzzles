@@ -34,7 +34,7 @@ const key = (id) => 'puzzles.' + id;
 const randomSeed = () => Math.floor(Math.random() * 2 ** 31);
 function load(id) { try { const s = localStorage.getItem(key(id)); return s ? JSON.parse(s) : null; } catch { return null; } }
 function save() {
-  if (!current) return;
+  if (!current || current.replay) return;
   try {
     localStorage.setItem(key(current.game.id), JSON.stringify({
       seed: current.seed, size: current.size, state: current.state, elapsed: current.elapsed, solved: current.solved,
@@ -123,19 +123,22 @@ function confetti() {
   requestAnimationFrame(frame);
 }
 
-function newPuzzle(game, seed, size, saved) {
+function newPuzzle(game, seed, size, saved, replay) {
   pauseTimer();
   els.modal.hidden = true;
   const puzzle = game.generate(seed, size);
   current = {
-    game, puzzle, seed, size,
-    state: saved ? saved.state : null, elapsed: saved ? saved.elapsed || 0 : 0,
-    solved: saved ? !!saved.solved : false, startedAt: null,
+    game, puzzle, seed, size, replay: !!replay,
+    state: replay ? game.solvedState(puzzle) : saved ? saved.state : null,
+    elapsed: replay ? replay.ms : saved ? saved.elapsed || 0 : 0,
+    solved: replay ? true : saved ? !!saved.solved : false, startedAt: null,
   };
   els.board.innerHTML = ''; els.actions.innerHTML = '';
   els.board.classList.toggle('solved', current.solved);
   els.rules.textContent = game.rules;
-  els.seed.textContent = '#' + seed + (size ? ' · ' + size + '×' + size : '');
+  els.seed.textContent = replay
+    ? 'Replay · solved in ' + fmt(replay.ms) + ' on ' + new Date(replay.at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' · #' + seed
+    : '#' + seed + (size ? ' · ' + size + '×' + size : '');
   const api = {
     onChange(state) {
       current.state = state;
@@ -210,9 +213,25 @@ function selectGame(id) {
     els.size.innerHTML = '<option value="random">Random</option>' + game.sizes.map((s) => `<option value="${s}">${s}×${s}</option>`).join('');
     els.size.value = sizeMode(game);
   } else els.size.hidden = true;
+  // Resume only a game that is started and unfinished; otherwise start fresh.
   const saved = load(game.id);
-  if (saved && saved.seed != null && (!game.sizes || game.sizes.includes(saved.size))) newPuzzle(game, saved.seed, saved.size, saved);
+  const inProgress = saved && saved.seed != null && !saved.solved && saved.elapsed > 0 && (!game.sizes || game.sizes.includes(saved.size));
+  if (inProgress) newPuzzle(game, saved.seed, saved.size, saved);
   else newPuzzle(game, randomSeed(), resolveSize(game), null);
+}
+
+// Show a past solve on its board, without touching the in-progress game.
+function replaySolve(entry) {
+  const game = GAMES.find((g) => g.id === entry.g);
+  if (!game) return;
+  if (game.sizes && !game.sizes.includes(entry.n)) return;
+  els.results.hidden = true;
+  els.home.hidden = true; els.gameView.hidden = false;
+  els.homeBtn.hidden = false; els.statsHome.hidden = true;
+  els.title.textContent = game.name;
+  if (location.hash !== '#' + game.id) history.replaceState(null, '', '#' + game.id);
+  if (game.sizes) { els.size.hidden = false; els.size.innerHTML = '<option value="random">Random</option>' + game.sizes.map((s) => `<option value="${s}">${s}×${s}</option>`).join(''); els.size.value = String(entry.n); } else els.size.hidden = true;
+  newPuzzle(game, entry.seed, game.sizes ? entry.n : null, null, { ms: entry.ms, at: entry.at });
 }
 
 function route() {
@@ -271,7 +290,8 @@ function renderResults() {
     const tr = document.createElement('tr');
     const d = new Date(e.at);
     const sizeCol = game.sizes && allSizes ? `<td class="muted">${e.n}×${e.n}</td>` : '';
-    tr.innerHTML = `<td class="muted">${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} ${d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</td>${sizeCol}<td>${fmt(e.ms)}</td>`;
+    tr.innerHTML = `<td class="muted">${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} ${d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</td>${sizeCol}<td>${fmt(e.ms)}</td><td class="act"><button class="link small">View</button></td>`;
+    tr.querySelector('button').onclick = () => replaySolve(e);
     els.rTable.appendChild(tr);
   }
 }
