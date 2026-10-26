@@ -157,9 +157,10 @@ export function mount(root, puzzle, api, saved) {
   preview.className = 'preview'; preview.style.display = 'none';
   wrap.appendChild(grid); wrap.appendChild(overlay); wrap.appendChild(preview); root.appendChild(wrap);
 
-  const place = (el, rc) => {
-    el.style.left = (rc.c / n) * 100 + '%'; el.style.top = (rc.r / n) * 100 + '%';
-    el.style.width = (rc.w / n) * 100 + '%'; el.style.height = (rc.h / n) * 100 + '%';
+  // Inset each patch a little so neighbours read as separate rounded tiles.
+  const place = (el, rc, gap = 3) => {
+    el.style.left = `calc(${(rc.c / n) * 100}% + ${gap}px)`; el.style.top = `calc(${(rc.r / n) * 100}% + ${gap}px)`;
+    el.style.width = `calc(${(rc.w / n) * 100}% - ${gap * 2}px)`; el.style.height = `calc(${(rc.h / n) * 100}% - ${gap * 2}px)`;
   };
   const owner = new Int16Array(N);
   function render() {

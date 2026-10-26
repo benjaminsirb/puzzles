@@ -186,7 +186,7 @@ const resolveSize = (game) => {
 
 const GLYPHS = {
   queens: { bg: '#f8f1a0', svg: '<svg viewBox="0 0 24 24" fill="#1b1f2a"><path d="M4 18h16l1.2-9-4.6 3.2L12 5l-4.6 7.2L2.8 9z"/><rect x="4" y="19" width="16" height="2.5" rx="1"/></svg>' },
-  tango: { bg: '#fde7c2', svg: '<svg viewBox="0 0 48 24"><circle cx="13" cy="12" r="6" fill="#f59e0b"/><g stroke="#f59e0b" stroke-width="2" stroke-linecap="round"><path d="M13 1.5v3M13 19.5v3M2.5 12h3M20.5 12h3M5.6 4.6l2.1 2.1M18.3 17.3l2.1 2.1M5.6 19.4l2.1-2.1M18.3 6.7l2.1-2.1"/></g><path d="M37.5 3a9 9 0 1 0 6.5 15.3A8 8 0 0 1 37.5 3z" fill="#60a5fa"/></svg>' },
+  tango: { bg: '#fde7c2', svg: '<svg viewBox="0 0 48 24"><circle cx="12" cy="12" r="8.5" fill="#f5a623"/><path d="M38.8 3.3a8.7 8.7 0 1 0 6 15.4 10.2 10.2 0 0 1-6-15.4z" fill="#5b7cc4"/></svg>' },
   zip: { bg: '#dbe7ff', svg: '<svg viewBox="0 0 40 24" fill="none"><path d="M6 6h14v12h14" stroke="#2563eb" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6" cy="6" r="4.5" fill="#1b1f2a"/><circle cx="34" cy="18" r="4.5" fill="#1b1f2a"/></svg>' },
   patches: { bg: '#e6f4e1', svg: '<svg viewBox="0 0 40 24"><rect x="1" y="1" width="16" height="22" rx="2" fill="#f7b8b8"/><rect x="19" y="1" width="20" height="10" rx="2" fill="#c3c6f5"/><rect x="19" y="13" width="9" height="10" rx="2" fill="#bfe8b5"/><rect x="30" y="13" width="9" height="10" rx="2" fill="#fbd59f"/></svg>' },
 };
