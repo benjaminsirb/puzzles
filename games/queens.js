@@ -279,11 +279,13 @@ export function mount(root, puzzle, api, saved) {
     }
     return out;
   };
-  // Re-derive every auto X from the queens on the board.
+  // Re-derive every auto X from the queens on the board. Cells the player cleared by hand stay
+  // blank until the next queen is placed, so a tap can always remove an X.
+  const cleared = new Set();
   function refreshAuto() {
     for (let i = 0; i < n * n; i++) if (marks[i] === 3) marks[i] = 0;
     if (!autoX) return;
-    for (let i = 0; i < n * n; i++) if (marks[i] === 2) for (const j of attacked_(i)) if (marks[j] === 0) marks[j] = 3;
+    for (let i = 0; i < n * n; i++) if (marks[i] === 2) for (const j of attacked_(i)) if (marks[j] === 0 && !cleared.has(j)) marks[j] = 3;
   }
 
   function render() {
@@ -307,6 +309,8 @@ export function mount(root, puzzle, api, saved) {
   function tap(i) {
     // empty -> X -> queen -> empty; an auto X goes straight to queen
     marks[i] = marks[i] === 0 ? 1 : marks[i] === 2 ? 0 : 2;
+    if (marks[i] === 0) cleared.add(i);
+    if (marks[i] === 2) cleared.clear();
     refreshAuto();
     const win = render();
     api.onChange({ marks });
