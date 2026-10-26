@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Puzzles link preview</title>
+<link rel="stylesheet" href="../style.css">
+<style>
+  html, body { width: 1200px; height: 630px; overflow: hidden; margin: 0; padding: 0; background: #f6f3ee; color: #1b1f2a; }
+  .og { display: flex; width: 1200px; height: 630px; align-items: center; padding: 0 60px; gap: 50px; box-sizing: border-box; }
+  .intro { width: 420px; }
+  .intro h1 { font-size: 72px; margin: 0 0 8px; letter-spacing: -1.5px; display: flex; align-items: center; gap: 18px; }
+  .intro h1 img { width: 76px; height: 76px; }
+  .intro p { font-size: 26px; line-height: 1.3; color: #4b5563; margin: 0 0 22px; }
+  .intro .pills { display: flex; flex-wrap: wrap; gap: 8px; }
+  .intro .pills span { background: #2563eb; color: #fff; font-weight: 700; font-size: 20px; padding: 8px 16px; border-radius: 999px; }
+  .intro .pills span.alt { background: #fff; color: #1b1f2a; border: 2px solid #e5e1d8; }
+  .boards { display: grid; grid-template-columns: 236px 236px; gap: 14px 36px; flex: none; margin-left: auto; }
+  .mini { width: 100%; }
+  .mini .board { width: 100%; }
+  .mini .grid { border-radius: 10px; border-width: 3px; }
+  .mini .label { font-weight: 800; font-size: 19px; margin: 6px 0 0; text-align: center; line-height: 1; }
+  .mini .actions { display: none; }
+</style>
+</head>
+<body>
+<div class="og">
+  <div class="intro">
+    <h1><img src="../icons/icon.svg" alt="">Puzzles</h1>
+    <p>Queens, Tango, Zip and Patches. Unlimited puzzles, offline, no account.</p>
+    <div class="pills"><span>Free</span><span class="alt">Works offline</span><span class="alt">Add to Home Screen</span></div>
+  </div>
+  <div class="boards" id="boards"></div>
+</div>
+<script type="module">
+  import * as queens from '../games/queens.js';
+  import * as tango from '../games/tango.js';
+  import * as zip from '../games/zip.js';
+  import * as patches from '../games/patches.js';
+  const api = { onChange() {}, onWin() {}, isSolved: () => false, addAction: () => document.createElement('button') };
+  const show = (game, seed, size, state) => {
+    const wrap = document.createElement('div'); wrap.className = 'mini';
+    const board = document.createElement('div'); board.className = 'board';
+    wrap.appendChild(board);
+    const p = game.generate(seed, size);
+    game.mount(board, p, api, state(p));
+    const l = document.createElement('div'); l.className = 'label'; l.textContent = game.name; wrap.appendChild(l);
+    document.querySelector('#boards').appendChild(wrap);
+  };
+  show(queens, 445994524, 8, (p) => { const marks = new Array(64).fill(0); p.solution.slice(0, 3).forEach((c, r) => { marks[r * 8 + c] = 2; }); [11, 20, 27, 33].forEach((i) => { if (!marks[i]) marks[i] = 1; }); return { marks }; });
+  show(tango, 361247800, null, (p) => { const vals = p.given.slice(); [0, 1, 3, 7, 8, 13, 14, 19, 21, 26, 30].forEach((i) => { vals[i] = p.solution[i]; }); return { vals }; });
+  show(zip, 1223437120, 6, (p) => ({ path: p.solution.slice(0, 14) }));
+  show(patches, 358177393, 6, (p) => ({ patches: p.solution.slice(0, 3).map((rc, i) => ({ ...rc, ci: i })) }));
+</script>
+</body>
+</html>
