@@ -20,7 +20,7 @@ if ('serviceWorker' in navigator) {
 const GAMES = [queens, tango, zip, patches];
 const $ = (s) => document.querySelector(s);
 const els = {
-  tabs: $('#tabs'), timer: $('#timer'), size: $('#size'), newBtn: $('#new'),
+  home: $('#home'), gameView: $('#game'), tiles: $('#tiles'), homeBtn: $('#home-btn'), title: $('#title'), statsHome: $('#stats-home'), timer: $('#timer'), size: $('#size'), newBtn: $('#new'),
   board: $('#board'), actions: $('#actions'), rules: $('#rules'), seed: $('#seed'), statsBtn: $('#stats'),
   results: $('#results'), rGames: $('#results-games'), rSizes: $('#results-sizes'), rTiles: $('#results-tiles'), rChart: $('#results-chart'), rTip: $('#results-tip'), rTable: $('#results-table'), rClose: $('#results-close'), rClear: $('#results-clear'), modalResults: $('#modal-results'),
   cover: $('#cover'), coverTitle: $('#cover-title'), coverSub: $('#cover-sub'), coverBtn: $('#cover-btn'),
@@ -171,11 +171,40 @@ const resolveSize = (game) => {
   return mode === 'random' ? game.sizes[Math.floor(Math.random() * game.sizes.length)] : +mode;
 };
 
+const GLYPHS = {
+  queens: { bg: '#f8f1a0', svg: '<svg viewBox="0 0 24 24" fill="#1b1f2a"><path d="M4 18h16l1.2-9-4.6 3.2L12 5l-4.6 7.2L2.8 9z"/><rect x="4" y="19" width="16" height="2.5" rx="1"/></svg>' },
+  tango: { bg: '#fde7c2', svg: '<svg viewBox="0 0 48 24"><circle cx="13" cy="12" r="6" fill="#f59e0b"/><g stroke="#f59e0b" stroke-width="2" stroke-linecap="round"><path d="M13 1.5v3M13 19.5v3M2.5 12h3M20.5 12h3M5.6 4.6l2.1 2.1M18.3 17.3l2.1 2.1M5.6 19.4l2.1-2.1M18.3 6.7l2.1-2.1"/></g><path d="M37.5 3a9 9 0 1 0 6.5 15.3A8 8 0 0 1 37.5 3z" fill="#60a5fa"/></svg>' },
+  zip: { bg: '#dbe7ff', svg: '<svg viewBox="0 0 40 24" fill="none"><path d="M6 6h14v12h14" stroke="#2563eb" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6" cy="6" r="4.5" fill="#1b1f2a"/><circle cx="34" cy="18" r="4.5" fill="#1b1f2a"/></svg>' },
+  patches: { bg: '#e6f4e1', svg: '<svg viewBox="0 0 40 24"><rect x="1" y="1" width="16" height="22" rx="2" fill="#f7b8b8"/><rect x="19" y="1" width="20" height="10" rx="2" fill="#c3c6f5"/><rect x="19" y="13" width="9" height="10" rx="2" fill="#bfe8b5"/><rect x="30" y="13" width="9" height="10" rx="2" fill="#fbd59f"/></svg>' },
+};
+const TAGLINES = { queens: 'One queen per row, column and region.', tango: 'Suns and moons, three of each.', zip: 'One path through every cell.', patches: 'Tile the grid with rectangles.' };
+
+function showHome() {
+  pauseTimer();
+  els.gameView.hidden = true; els.home.hidden = false;
+  els.homeBtn.hidden = true; els.statsHome.hidden = false;
+  els.title.textContent = 'Puzzles';
+  els.modal.hidden = true;
+  if (location.hash) history.replaceState(null, '', location.pathname);
+  els.tiles.innerHTML = '';
+  for (const g of GAMES) {
+    const st = solves.stats(solves.filter(g.id, null));
+    const b = document.createElement('button');
+    b.className = 'tile-game';
+    b.innerHTML = `<div class="glyph" style="background:${GLYPHS[g.id].bg}">${GLYPHS[g.id].svg}</div><div class="name">${g.name}</div><div class="tag">${TAGLINES[g.id]}</div><div class="meta">${st ? `Best <b>${fmt(st.best)}</b> · ${st.count} solved` : 'Not played yet'}</div>`;
+    b.onclick = () => { location.hash = g.id; };
+    els.tiles.appendChild(b);
+  }
+}
+
 function selectGame(id) {
-  const game = GAMES.find((g) => g.id === id) || GAMES[0];
+  const game = GAMES.find((g) => g.id === id);
+  if (!game) { showHome(); return; }
+  els.home.hidden = true; els.gameView.hidden = false;
+  els.homeBtn.hidden = false; els.statsHome.hidden = true;
+  els.title.textContent = game.name;
   localStorage.setItem('puzzles.current', game.id);
   if (location.hash !== '#' + game.id) history.replaceState(null, '', '#' + game.id);
-  for (const b of els.tabs.children) b.classList.toggle('active', b.dataset.id === game.id);
   if (game.sizes) {
     els.size.hidden = false;
     els.size.innerHTML = '<option value="random">Random</option>' + game.sizes.map((s) => `<option value="${s}">${s}×${s}</option>`).join('');
@@ -186,28 +215,30 @@ function selectGame(id) {
   else newPuzzle(game, randomSeed(), resolveSize(game), null);
 }
 
-for (const g of GAMES) {
-  const b = document.createElement('button');
-  b.textContent = g.name; b.dataset.id = g.id;
-  b.onclick = () => selectGame(g.id);
-  els.tabs.appendChild(b);
+function route() {
+  const id = location.hash.slice(1);
+  if (id && GAMES.some((g) => g.id === id)) { if (!current || current.game.id !== id || els.gameView.hidden) selectGame(id); }
+  else showHome();
 }
+els.homeBtn.onclick = () => { location.hash = ''; };
+els.statsHome.onclick = () => openResults(localStorage.getItem('puzzles.current') || 'queens');
+
 els.newBtn.onclick = () => newPuzzle(current.game, randomSeed(), resolveSize(current.game), null);
 els.modalNew.onclick = els.newBtn.onclick;
 els.modalClose.onclick = () => { els.modal.hidden = true; };
-els.modalResults.onclick = () => { els.modal.hidden = true; openResults(current.game.id, current.size); };
-els.statsBtn.onclick = () => openResults(current.game.id, current.size);
+els.modalResults.onclick = () => { els.modal.hidden = true; openResults(current.game.id); };
+els.statsBtn.onclick = () => openResults(current.game.id);
 els.rClose.onclick = () => { els.results.hidden = true; };
 els.results.addEventListener('click', (e) => { if (e.target === els.results) els.results.hidden = true; });
 els.rClear.onclick = () => { if (confirm('Delete all recorded solve times?')) { solves.clear(); renderResults(); } };
 els.modal.addEventListener('click', (e) => { if (e.target === els.modal) els.modal.hidden = true; });
 els.size.onchange = () => { localStorage.setItem(sizeKey(current.game.id), els.size.value); newPuzzle(current.game, randomSeed(), resolveSize(current.game), null); };
-window.addEventListener('hashchange', () => { const id = location.hash.slice(1); if (id && id !== current.game.id) selectGame(id); });
+window.addEventListener('hashchange', route);
 
 // ---- Results view ----
 let rSel = { game: 'queens', size: null };
-function openResults(gameId, size) {
-  rSel = { game: gameId, size: size || null };
+function openResults(gameId) {
+  rSel = { game: gameId, size: 'all' };
   els.results.hidden = false;
   renderResults();
 }
@@ -218,13 +249,15 @@ function pill(label, active, fn) {
 function renderResults() {
   const game = GAMES.find((g) => g.id === rSel.game);
   els.rGames.innerHTML = '';
-  for (const g of GAMES) els.rGames.appendChild(pill(g.name, g.id === rSel.game, () => { rSel = { game: g.id, size: g.sizes ? g.defaultSize : null }; renderResults(); }));
+  for (const g of GAMES) els.rGames.appendChild(pill(g.name, g.id === rSel.game, () => { rSel = { game: g.id, size: 'all' }; renderResults(); }));
   els.rSizes.innerHTML = '';
   if (game.sizes) {
-    if (!game.sizes.includes(rSel.size)) rSel.size = game.defaultSize;
+    if (rSel.size !== 'all' && !game.sizes.includes(rSel.size)) rSel.size = 'all';
+    els.rSizes.appendChild(pill('All sizes', rSel.size === 'all', () => { rSel.size = 'all'; renderResults(); }));
     for (const n of game.sizes) els.rSizes.appendChild(pill(n + '×' + n, n === rSel.size, () => { rSel.size = n; renderResults(); }));
   } else rSel.size = null;
-  const list = solves.filter(rSel.game, rSel.size == null ? 0 : rSel.size);
+  const allSizes = !game.sizes || rSel.size === 'all';
+  const list = solves.filter(rSel.game, game.sizes ? (allSizes ? null : rSel.size) : 0);
   const st = solves.stats(list);
   els.rTiles.innerHTML = '';
   for (const [k, v] of [['Solved', st ? st.count : 0], ['Best', st ? fmt(st.best) : '–'], ['Average', st ? fmt(st.avg) : '–'], ['Last 5', st ? fmt(st.last5) : '–']]) {
@@ -237,7 +270,8 @@ function renderResults() {
   for (const e of list.slice().reverse().slice(0, 50)) {
     const tr = document.createElement('tr');
     const d = new Date(e.at);
-    tr.innerHTML = `<td class="muted">${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} ${d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</td><td>${fmt(e.ms)}</td>`;
+    const sizeCol = game.sizes && allSizes ? `<td class="muted">${e.n}×${e.n}</td>` : '';
+    tr.innerHTML = `<td class="muted">${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} ${d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</td>${sizeCol}<td>${fmt(e.ms)}</td>`;
     els.rTable.appendChild(tr);
   }
 }
@@ -279,7 +313,7 @@ function drawChart(list, st) {
     cross.setAttribute('x1', x(i)); cross.setAttribute('x2', x(i)); cross.style.display = '';
     const r = svg.getBoundingClientRect();
     const d = new Date(list[i].at);
-    els.rTip.textContent = fmt(list[i].ms) + ' · ' + d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    els.rTip.textContent = fmt(list[i].ms) + (list[i].n ? ' · ' + list[i].n + '×' + list[i].n : '') + ' · ' + d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
     els.rTip.style.left = (x(i) / W) * r.width + 'px';
     els.rTip.style.top = (y(secs[i]) / H) * r.height + 'px';
     els.rTip.hidden = false;
@@ -295,5 +329,5 @@ function drawChart(list, st) {
   svg.onpointerleave = () => { if (hot >= 0) pts[hot].classList.remove('hot'); hot = -1; cross.style.display = 'none'; els.rTip.hidden = true; };
 }
 
-selectGame(location.hash.slice(1) || localStorage.getItem('puzzles.current') || 'queens');
+route();
 

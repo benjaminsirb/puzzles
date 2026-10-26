@@ -31,9 +31,18 @@
 </head>
 <body>
 <header class="top">
-  <nav class="tabs" id="tabs"></nav>
+  <nav class="topbar">
+    <button id="home-btn" class="back" hidden>&#8249; Puzzles</button>
+    <h1 id="title" class="title">Puzzles</h1>
+    <button id="stats-home" class="btn ghost small">Stats</button>
+  </nav>
 </header>
 <main>
+<section id="home" class="home">
+  <p class="home-sub">Unlimited puzzles. Pick a game.</p>
+  <div class="tiles-grid" id="tiles"></div>
+</section>
+<section id="game" hidden>
   <div class="bar">
     <div class="timer" id="timer">0:00</div>
     <div class="bar-right">
@@ -55,6 +64,7 @@
   <div id="actions" class="actions"></div>
   <p id="rules" class="rules"></p>
   <p id="seed" class="seed"></p>
+</section>
 </main>
 <canvas id="confetti" class="confetti" hidden></canvas>
 <div id="modal" class="modal" hidden>
