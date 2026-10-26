@@ -201,17 +201,49 @@ export function mount(root, puzzle, api, saved) {
     return queens.length === n && bad.size === 0;
   }
 
-  grid.addEventListener('click', (e) => {
-    const d = e.target.closest('.cell');
-    if (!d || api.isSolved()) return;
-    const i = +d.dataset.i;
+  function tap(i) {
     // empty -> X -> queen -> empty; an auto X goes straight to queen
     marks[i] = marks[i] === 0 ? 1 : marks[i] === 2 ? 0 : 2;
     refreshAuto();
     const win = render();
     api.onChange({ marks });
     if (win) api.onWin();
+  }
+  function cellAt(e) {
+    const b = grid.getBoundingClientRect();
+    const c = Math.floor(((e.clientX - b.left) / b.width) * n), r = Math.floor(((e.clientY - b.top) / b.height) * n);
+    return r < 0 || c < 0 || r >= n || c >= n ? -1 : r * n + c;
+  }
+  // Press and drag paints an X on every empty cell passed over; a plain tap cycles the cell.
+  let down = -1, last = -1, dragged = false;
+  const paint = (i) => { if (i >= 0 && marks[i] === 0) { marks[i] = 1; render(); } };
+  // Fill every cell on the straight line between two cells so a fast swipe leaves no gaps.
+  const paintLine = (a, b) => {
+    const ar = Math.floor(a / n), ac = a % n, br = Math.floor(b / n), bc = b % n;
+    const steps = Math.max(Math.abs(br - ar), Math.abs(bc - ac), 1);
+    for (let k = 0; k <= steps; k++) paint(Math.round(ar + ((br - ar) * k) / steps) * n + Math.round(ac + ((bc - ac) * k) / steps));
+  };
+  grid.addEventListener('pointerdown', (e) => {
+    if (api.isSolved()) return;
+    e.preventDefault();
+    grid.setPointerCapture(e.pointerId);
+    down = last = cellAt(e); dragged = false;
   });
+  grid.addEventListener('pointermove', (e) => {
+    if (down < 0) return;
+    const i = cellAt(e);
+    if (i < 0 || i === last) return;
+    if (!dragged) { dragged = true; paint(down); }
+    paintLine(last, i);
+    last = i;
+  });
+  const up = () => {
+    if (down < 0) return;
+    if (dragged) api.onChange({ marks }); else tap(down);
+    down = -1; dragged = false;
+  };
+  grid.addEventListener('pointerup', up);
+  grid.addEventListener('pointercancel', () => { if (dragged) api.onChange({ marks }); down = -1; dragged = false; });
   api.addAction('Clear', () => { if (api.isSolved()) return; marks.fill(0); render(); api.onChange({ marks }); });
   const toggle = api.addAction('', () => {
     autoX = !autoX;
