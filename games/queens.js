@@ -10,6 +10,9 @@ const PALETTE = ['#f7b8b8', '#fbd59f', '#f8f1a0', '#bfe8b5', '#aee0ee', '#c3c6f5
 
 const QUEEN = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 18h16l1.2-9-4.6 3.2L12 5l-4.6 7.2L2.8 9z"/><rect x="4" y="19" width="16" height="2.5" rx="1"/></svg>';
 const X = '<svg class="x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M7 7l10 10M17 7L7 17"/></svg>';
+const AUTO_X = X.replace('class="x"', 'class="x auto"');
+const AUTO_KEY = 'puzzles.queens.autoX';
+// marks: 0 empty, 1 X, 2 queen, 3 auto-placed X
 
 function placeQueens(n, rng) {
   const cols = new Array(n).fill(-1);
@@ -144,6 +147,7 @@ export function generate(seed, size) {
 export function mount(root, puzzle, api, saved) {
   const { n, region } = puzzle;
   const marks = saved && Array.isArray(saved.marks) && saved.marks.length === n * n ? saved.marks.slice() : new Array(n * n).fill(0);
+  let autoX = localStorage.getItem(AUTO_KEY) !== 'off';
   const grid = document.createElement('div');
   grid.className = 'grid queens';
   grid.style.setProperty('--n', n);
@@ -162,11 +166,28 @@ export function mount(root, puzzle, api, saved) {
   }
   root.appendChild(grid);
 
+  // Cells a queen at i rules out: same row, column, region, or touching.
+  const attacked = (i) => {
+    const r = Math.floor(i / n), c = i % n, out = [];
+    for (let j = 0; j < n * n; j++) {
+      if (j === i) continue;
+      const rj = Math.floor(j / n), cj = j % n;
+      if (rj === r || cj === c || region[rj][cj] === region[r][c] || (Math.abs(rj - r) <= 1 && Math.abs(cj - c) <= 1)) out.push(j);
+    }
+    return out;
+  };
+  // Re-derive every auto X from the queens on the board.
+  function refreshAuto() {
+    for (let i = 0; i < n * n; i++) if (marks[i] === 3) marks[i] = 0;
+    if (!autoX) return;
+    for (let i = 0; i < n * n; i++) if (marks[i] === 2) for (const j of attacked(i)) if (marks[j] === 0) marks[j] = 3;
+  }
+
   function render() {
     const queens = [];
     for (let i = 0; i < n * n; i++) {
       cells[i].classList.remove('error');
-      cells[i].innerHTML = marks[i] === 1 ? X : marks[i] === 2 ? QUEEN : '';
+      cells[i].innerHTML = marks[i] === 1 ? X : marks[i] === 3 ? AUTO_X : marks[i] === 2 ? QUEEN : '';
       if (marks[i] === 2) queens.push(i);
     }
     const bad = new Set();
@@ -184,11 +205,21 @@ export function mount(root, puzzle, api, saved) {
     const d = e.target.closest('.cell');
     if (!d || api.isSolved()) return;
     const i = +d.dataset.i;
-    marks[i] = (marks[i] + 1) % 3;
+    // empty -> X -> queen -> empty; an auto X goes straight to queen
+    marks[i] = marks[i] === 0 ? 1 : marks[i] === 2 ? 0 : 2;
+    refreshAuto();
     const win = render();
     api.onChange({ marks });
     if (win) api.onWin();
   });
   api.addAction('Clear', () => { if (api.isSolved()) return; marks.fill(0); render(); api.onChange({ marks }); });
+  const toggle = api.addAction('', () => {
+    autoX = !autoX;
+    localStorage.setItem(AUTO_KEY, autoX ? 'on' : 'off');
+    toggle.textContent = 'Auto-X: ' + (autoX ? 'on' : 'off');
+    if (api.isSolved()) return;
+    refreshAuto(); render(); api.onChange({ marks });
+  });
+  toggle.textContent = 'Auto-X: ' + (autoX ? 'on' : 'off');
   render();
 }

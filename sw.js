@@ -1,4 +1,4 @@
-const CACHE = 'puzzles-v1';
+const CACHE = 'puzzles-v2';
 const ASSETS = [
   './', './index.html', './style.css', './app.js', './lib/rng.js',
   './games/queens.js', './games/tango.js', './games/zip.js', './games/patches.js',
