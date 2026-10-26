@@ -232,12 +232,16 @@ export function mount(root, puzzle, api, saved) {
     if (k) { if (k !== expected()) return false; if (k === total && path.length + 1 !== N) return false; }
     return true;
   }
-  function cellAt(e) {
+  function gridPoint(e) {
     const b = grid.getBoundingClientRect();
-    const c = Math.floor(((e.clientX - b.left) / b.width) * n), r = Math.floor(((e.clientY - b.top) / b.height) * n);
+    return { x: ((e.clientX - b.left) / b.width) * n, y: ((e.clientY - b.top) / b.height) * n };
+  }
+  function cellOf(p) {
+    const c = Math.floor(p.x), r = Math.floor(p.y);
     if (r < 0 || c < 0 || r >= n || c >= n) return -1;
     return r * n + c;
   }
+  const cellAt = (e) => cellOf(gridPoint(e));
   function commit() { const win = render(); api.onChange({ path }); if (win) api.onWin(); }
   function step(to) {
     if (to < 0) return;
@@ -245,21 +249,50 @@ export function mount(root, puzzle, api, saved) {
     const headCell = path[path.length - 1];
     if (to === headCell) return;
     if (path.length > 1 && to === path[path.length - 2]) { path.pop(); commit(); return; }
-    if (canStep(headCell, to)) { path.push(to); commit(); }
+    if (canStep(headCell, to)) { path.push(to); commit(); return; }
+    // Dragging back along the drawn line erases it, even when the finger cuts a corner.
+    const at = path.indexOf(to);
+    if (at >= 0 && at >= path.length - 3) { path.length = at + 1; commit(); return; }
+    // A diagonal move lands two cells away; bridge through whichever corner cell is open.
+    const hr = Math.floor(headCell / n), hc = headCell % n, tr = Math.floor(to / n), tc = to % n;
+    if (Math.abs(hr - tr) === 1 && Math.abs(hc - tc) === 1 && !inPath[to]) {
+      for (const mid of [hr * n + tc, tr * n + hc]) {
+        if (!canStep(headCell, mid)) continue;
+        path.push(mid); inPath[mid] = 1;
+        if (canStep(mid, to)) { path.push(to); commit(); return; }
+        path.pop(); inPath[mid] = 0;
+      }
+    }
   }
-  let dragging = false;
+  // Pointer events arrive at most once per frame, so a quick drag skips cells.
+  // Walk the straight track from the previous sample and step through every cell it crosses.
+  let dragging = false, lastPt = null;
+  function dragTo(p) {
+    if (lastPt) {
+      const dx = p.x - lastPt.x, dy = p.y - lastPt.y;
+      const k = Math.ceil(Math.max(Math.abs(dx), Math.abs(dy)) * 4);
+      for (let s = 1; s <= k; s++) step(cellOf({ x: lastPt.x + (dx * s) / k, y: lastPt.y + (dy * s) / k }));
+    }
+    step(cellOf(p));
+    lastPt = p;
+  }
   grid.addEventListener('pointerdown', (e) => {
     if (api.isSolved()) return;
     e.preventDefault();
-    grid.setPointerCapture(e.pointerId);
+    try { grid.setPointerCapture(e.pointerId); } catch {}
     dragging = true;
-    const i = cellAt(e);
+    const p = gridPoint(e), i = cellOf(p);
+    lastPt = p;
     if (i < 0) return;
     const at = path.indexOf(i);
     if (at >= 0) { path.length = at + 1; commit(); } else step(i);
   });
-  grid.addEventListener('pointermove', (e) => { if (dragging && !api.isSolved()) step(cellAt(e)); });
-  const end = () => { dragging = false; };
+  grid.addEventListener('pointermove', (e) => {
+    if (!dragging || api.isSolved()) return;
+    const evs = typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : [];
+    for (const ce of evs.length ? evs : [e]) dragTo(gridPoint(ce));
+  });
+  const end = () => { dragging = false; lastPt = null; };
   grid.addEventListener('pointerup', end); grid.addEventListener('pointercancel', end);
   api.addAction('Clear', () => { if (api.isSolved()) return; path = []; commit(); });
   api.addAction('Hint', () => {
