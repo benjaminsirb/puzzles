@@ -1,4 +1,7 @@
-const CACHE = 'puzzles-v5';
+// Atomic app-shell cache: every version precaches a complete, consistent set of files
+// and serves only from that set. A new version installs beside the old one, then takes over.
+const VERSION = 'v6';
+const CACHE = 'puzzles-' + VERSION;
 const ASSETS = [
   './', './index.html', './style.css', './app.js', './lib/rng.js', './lib/history.js',
   './games/queens.js', './games/tango.js', './games/zip.js', './games/patches.js',
@@ -6,7 +9,11 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));
+  e.waitUntil(
+    caches.open(CACHE)
+      .then((c) => c.addAll(ASSETS.map((u) => new Request(u, { cache: 'reload' }))))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', (e) => {
@@ -17,18 +24,12 @@ self.addEventListener('activate', (e) => {
   );
 });
 
-// Stale-while-revalidate: serve from cache, refresh in the background.
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
   const url = new URL(e.request.url);
   if (url.origin !== location.origin) return;
+  const key = e.request.mode === 'navigate' ? './index.html' : e.request;
   e.respondWith(
-    caches.open(CACHE).then(async (c) => {
-      const cached = await c.match(e.request);
-      const net = fetch(e.request)
-        .then((res) => { if (res.ok) c.put(e.request, res.clone()); return res; })
-        .catch(() => null);
-      return cached || (await net) || Response.error();
-    })
+    caches.open(CACHE).then(async (c) => (await c.match(key, { ignoreSearch: true })) || fetch(e.request))
   );
 });

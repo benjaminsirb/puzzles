@@ -4,6 +4,19 @@ import * as zip from './games/zip.js';
 import * as patches from './games/patches.js';
 import * as history from './lib/history.js';
 
+// Register the worker first so an update is never blocked by a later error. When a new
+// version takes control of an already-open page, reload once so every file matches.
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (hadController && !reloading) { reloading = true; location.reload(); }
+  });
+  navigator.serviceWorker.register('./sw.js').then((reg) => {
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update().catch(() => {}); });
+  }).catch(() => {});
+}
+
 const GAMES = [queens, tango, zip, patches];
 const $ = (s) => document.querySelector(s);
 const els = {
@@ -276,4 +289,3 @@ function drawChart(list, st) {
 
 selectGame(location.hash.slice(1) || localStorage.getItem('puzzles.current') || 'queens');
 
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
