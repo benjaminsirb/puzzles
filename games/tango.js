@@ -7,9 +7,8 @@ export const defaultSize = 6;
 export const rules = 'Fill the grid with suns and moons so each row and column holds three of each. No more than two of the same symbol may sit next to each other. Cells joined by = match; cells joined by × differ. Tap to cycle a cell.';
 
 const N = 6;
-const SUN = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5.5" fill="#f59e0b"/><g stroke="#f59e0b" stroke-width="2" stroke-linecap="round"><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></g></svg>';
-const MOON = '<svg viewBox="0 0 24 24"><path d="M14.5 3a9 9 0 1 0 6.5 15.3A8 8 0 0 1 14.5 3z" fill="#60a5fa"/></svg>';
-
+const SUN = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="#f5a623"/></svg>';
+const MOON = '<svg viewBox="0 0 24 24"><path d="M14.8 3.3a8.7 8.7 0 1 0 6 15.4 10.2 10.2 0 0 1-6-15.4z" fill="#5b7cc4"/></svg>';
 const makeCons = () => ({
   right: Array.from({ length: N }, () => new Array(N).fill(null)),
   down: Array.from({ length: N }, () => new Array(N).fill(null)),
@@ -151,10 +150,20 @@ export function mount(root, puzzle, api, saved) {
     let filled = 0;
     for (let i = 0; i < N * N; i++) {
       cells[i].innerHTML = vals[i] === 1 ? SUN : vals[i] === 2 ? MOON : '';
-      cells[i].classList.toggle('error', bad.has(i));
       if (vals[i]) filled++;
     }
+    showErrors(bad);
     return filled === N * N && bad.size === 0;
+  }
+
+  // Clear stale highlights at once, but wait a moment before adding new ones so a row
+  // that is being corrected does not flash red mid-edit.
+  let errTimer = null;
+  function showErrors(bad) {
+    for (let i = 0; i < N * N; i++) if (!bad.has(i)) cells[i].classList.remove('error');
+    clearTimeout(errTimer);
+    if (!bad.size) return;
+    errTimer = setTimeout(() => { for (const i of bad) if (vals[i]) cells[i].classList.add('error'); }, 700);
   }
 
   grid.addEventListener('click', (e) => {
