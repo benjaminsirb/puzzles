@@ -2,7 +2,7 @@ import * as queens from './games/queens.js';
 import * as tango from './games/tango.js';
 import * as zip from './games/zip.js';
 import * as patches from './games/patches.js';
-import * as history from './lib/history.js';
+import * as solves from './lib/history.js';
 
 // Register the worker first so an update is never blocked by a later error. When a new
 // version takes control of an already-open page, reload once so every file matches.
@@ -144,7 +144,7 @@ function newPuzzle(game, seed, size, saved) {
     onWin() {
       if (current.solved) return;
       pauseTimer(); current.solved = true; save(); renderTimer();
-      history.add({ g: game.id, n: size || 0, seed, ms: Math.round(current.elapsed), at: Date.now() });
+      solves.add({ g: game.id, n: size || 0, seed, ms: Math.round(current.elapsed), at: Date.now() });
       els.board.classList.add('solved');
       celebrate(current.elapsed);
     },
@@ -191,7 +191,7 @@ els.modalResults.onclick = () => { els.modal.hidden = true; openResults(current.
 els.statsBtn.onclick = () => openResults(current.game.id, current.size);
 els.rClose.onclick = () => { els.results.hidden = true; };
 els.results.addEventListener('click', (e) => { if (e.target === els.results) els.results.hidden = true; });
-els.rClear.onclick = () => { if (confirm('Delete all recorded solve times?')) { history.clear(); renderResults(); } };
+els.rClear.onclick = () => { if (confirm('Delete all recorded solve times?')) { solves.clear(); renderResults(); } };
 els.modal.addEventListener('click', (e) => { if (e.target === els.modal) els.modal.hidden = true; });
 els.size.onchange = () => newPuzzle(current.game, randomSeed(), +els.size.value, null);
 window.addEventListener('hashchange', () => { const id = location.hash.slice(1); if (id && id !== current.game.id) selectGame(id); });
@@ -216,8 +216,8 @@ function renderResults() {
     if (!game.sizes.includes(rSel.size)) rSel.size = game.defaultSize;
     for (const n of game.sizes) els.rSizes.appendChild(pill(n + '×' + n, n === rSel.size, () => { rSel.size = n; renderResults(); }));
   } else rSel.size = null;
-  const list = history.filter(rSel.game, rSel.size == null ? 0 : rSel.size);
-  const st = history.stats(list);
+  const list = solves.filter(rSel.game, rSel.size == null ? 0 : rSel.size);
+  const st = solves.stats(list);
   els.rTiles.innerHTML = '';
   for (const [k, v] of [['Solved', st ? st.count : 0], ['Best', st ? fmt(st.best) : '–'], ['Average', st ? fmt(st.avg) : '–'], ['Last 5', st ? fmt(st.last5) : '–']]) {
     const t = document.createElement('div'); t.className = 'tile';
