@@ -17,6 +17,16 @@ if ('serviceWorker' in navigator) {
   }).catch(() => {});
 }
 
+// iOS ignores the viewport zoom flags, so block double-tap and pinch zoom by hand.
+let lastTouchEnd = 0;
+document.addEventListener('touchend', (e) => {
+  const now = Date.now();
+  if (now - lastTouchEnd < 320) e.preventDefault();
+  lastTouchEnd = now;
+}, { passive: false });
+document.addEventListener('gesturestart', (e) => e.preventDefault(), { passive: false });
+document.addEventListener('dblclick', (e) => e.preventDefault(), { passive: false });
+
 const GAMES = [queens, tango, zip, patches];
 const $ = (s) => document.querySelector(s);
 const els = {

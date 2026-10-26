@@ -166,9 +166,11 @@ export function mount(root, puzzle, api, saved) {
     errTimer = setTimeout(() => { for (const i of bad) if (vals[i]) cells[i].classList.add('error'); }, 700);
   }
 
-  grid.addEventListener('click', (e) => {
+  // Act on pointerdown so rapid taps are never swallowed by the double-tap zoom guard.
+  grid.addEventListener('pointerdown', (e) => {
     const d = e.target.closest('.cell');
     if (!d || api.isSolved()) return;
+    e.preventDefault();
     const i = +d.dataset.i;
     if (given[i]) return;
     vals[i] = (vals[i] + 1) % 3;
