@@ -32,7 +32,18 @@
   <p id="rules" class="rules"></p>
   <p id="seed" class="seed"></p>
 </main>
-<div id="toast" class="toast" hidden></div>
+<canvas id="confetti" class="confetti" hidden></canvas>
+<div id="modal" class="modal" hidden>
+  <div class="card">
+    <div class="trophy"><svg viewBox="0 0 24 24"><path d="M4 18h16l1.2-9-4.6 3.2L12 5l-4.6 7.2L2.8 9z"/><rect x="4" y="19" width="16" height="2.5" rx="1"/></svg></div>
+    <h2 id="modal-title">Nice work!</h2>
+    <p id="modal-sub"></p>
+    <div class="row">
+      <button id="modal-close" class="btn ghost">Close</button>
+      <button id="modal-new" class="btn">New puzzle</button>
+    </div>
+  </div>
+</div>
 <script type="module" src="app.js"></script>
 </body>
 </html>

@@ -7,12 +7,12 @@ const GAMES = [queens, tango, zip, patches];
 const $ = (s) => document.querySelector(s);
 const els = {
   tabs: $('#tabs'), timer: $('#timer'), size: $('#size'), newBtn: $('#new'),
-  board: $('#board'), actions: $('#actions'), rules: $('#rules'), seed: $('#seed'), toast: $('#toast'),
+  board: $('#board'), actions: $('#actions'), rules: $('#rules'), seed: $('#seed'),
+  modal: $('#modal'), modalTitle: $('#modal-title'), modalSub: $('#modal-sub'), modalClose: $('#modal-close'), modalNew: $('#modal-new'), confetti: $('#confetti'),
 };
 
 let current = null;
 let tick = null;
-let toastTimer = null;
 
 const key = (id) => 'puzzles.' + id;
 const randomSeed = () => Math.floor(Math.random() * 2 ** 31);
@@ -48,13 +48,54 @@ document.addEventListener('visibilitychange', () => {
   else if (current && current.touched && !current.solved) startTimer();
 });
 
-function toast(msg) {
-  els.toast.textContent = msg; els.toast.hidden = false;
-  clearTimeout(toastTimer); toastTimer = setTimeout(() => { els.toast.hidden = true; }, 4000);
+const PRAISE = ['Nice work!', 'Crushed it!', 'Flawless.', 'Good job!', 'Brilliant!', 'Too easy?'];
+
+function celebrate(ms) {
+  // Stagger the pop of every solved piece on the board.
+  const pieces = els.board.querySelectorAll('.queens .cell svg:not(.x), .tango .cell svg, .zip .num.hit, .patches .patch');
+  pieces.forEach((el, i) => { el.style.setProperty('--d', (i * 0.06) + 's'); });
+  confetti();
+  setTimeout(() => {
+    els.modalTitle.textContent = PRAISE[Math.floor(Math.random() * PRAISE.length)];
+    els.modalSub.textContent = 'Solved in ' + fmt(ms);
+    els.modal.hidden = false;
+  }, 900);
+}
+
+function confetti() {
+  const cv = els.confetti, ctx = cv.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  cv.width = innerWidth * dpr; cv.height = innerHeight * dpr; ctx.scale(dpr, dpr);
+  cv.hidden = false;
+  const colors = ['#f2b705', '#2563eb', '#ef4444', '#22c55e', '#a855f7', '#f97316'];
+  const parts = [];
+  const rect = els.board.getBoundingClientRect();
+  const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
+  for (let i = 0; i < 110; i++) {
+    const a = Math.random() * Math.PI * 2, sp = 6 + Math.random() * 9;
+    parts.push({ x: cx, y: cy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 4, w: 6 + Math.random() * 6, h: 4 + Math.random() * 4,
+      c: colors[i % colors.length], r: Math.random() * Math.PI, vr: (Math.random() - 0.5) * 0.3 });
+  }
+  const t0 = performance.now();
+  const frame = (t) => {
+    const k = (t - t0) / 1000;
+    ctx.clearRect(0, 0, innerWidth, innerHeight);
+    for (const p of parts) {
+      p.vy += 0.35; p.vx *= 0.98; p.x += p.vx; p.y += p.vy; p.r += p.vr;
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r);
+      ctx.globalAlpha = Math.max(0, 1 - k / 1.8);
+      ctx.fillStyle = p.c; ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+      ctx.restore();
+    }
+    if (k < 1.8) requestAnimationFrame(frame);
+    else { ctx.clearRect(0, 0, innerWidth, innerHeight); cv.hidden = true; }
+  };
+  requestAnimationFrame(frame);
 }
 
 function newPuzzle(game, seed, size, saved) {
   pauseTimer();
+  els.modal.hidden = true;
   const puzzle = game.generate(seed, size);
   current = {
     game, puzzle, seed, size,
@@ -75,7 +116,7 @@ function newPuzzle(game, seed, size, saved) {
       if (current.solved) return;
       pauseTimer(); current.solved = true; save(); renderTimer();
       els.board.classList.add('solved');
-      toast('Solved in ' + fmt(current.elapsed));
+      celebrate(current.elapsed);
     },
     isSolved: () => current.solved,
     addAction(label, fn) {
@@ -112,6 +153,9 @@ for (const g of GAMES) {
   els.tabs.appendChild(b);
 }
 els.newBtn.onclick = () => newPuzzle(current.game, randomSeed(), current.size, null);
+els.modalNew.onclick = els.newBtn.onclick;
+els.modalClose.onclick = () => { els.modal.hidden = true; };
+els.modal.addEventListener('click', (e) => { if (e.target === els.modal) els.modal.hidden = true; });
 els.size.onchange = () => newPuzzle(current.game, randomSeed(), +els.size.value, null);
 window.addEventListener('hashchange', () => { const id = location.hash.slice(1); if (id && id !== current.game.id) selectGame(id); });
 
