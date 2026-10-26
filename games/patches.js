@@ -143,6 +143,8 @@ export function mount(root, puzzle, api, saved) {
     d.className = 'cell';
     if (clueAt[i] >= 0) {
       const cl = clues[clueAt[i]];
+      d.classList.add('cluecell');
+      d.style.background = PALETTE[clueAt[i] % PALETTE.length];
       const num = document.createElement('div'); num.className = 'clue'; num.textContent = cl.area;
       const ic = document.createElement('div'); ic.className = 'icon'; ic.innerHTML = ICONS[cl.shape];
       d.appendChild(num); d.appendChild(ic);

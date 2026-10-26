@@ -128,27 +128,26 @@ export function mount(root, puzzle, api, saved) {
   wrap.appendChild(grid); wrap.appendChild(overlay); root.appendChild(wrap);
 
   function render() {
+    // Flag mistakes only in rows and columns that are completely filled.
     const bad = new Set();
     const at = (r, c) => vals[r * N + c];
-    for (let r = 0; r < N; r++) {
-      for (const v of [1, 2]) {
-        const row = [], col = [];
-        for (let k = 0; k < N; k++) { if (at(r, k) === v) row.push(r * N + k); if (at(k, r) === v) col.push(k * N + r); }
-        if (row.length > N / 2) row.forEach((i) => bad.add(i));
-        if (col.length > N / 2) col.forEach((i) => bad.add(i));
-      }
+    const full = (line) => line.every((i) => vals[i]);
+    const check = (line) => {
+      if (!full(line)) return;
+      for (const v of [1, 2]) if (line.filter((i) => vals[i] === v).length > N / 2) line.forEach((i) => bad.add(i));
       for (let k = 0; k < N - 2; k++) {
-        const a = at(r, k); if (a && a === at(r, k + 1) && a === at(r, k + 2)) [0, 1, 2].forEach((d) => bad.add(r * N + k + d));
-        const b = at(k, r); if (b && b === at(k + 1, r) && b === at(k + 2, r)) [0, 1, 2].forEach((d) => bad.add((k + d) * N + r));
+        const a = vals[line[k]];
+        if (a && a === vals[line[k + 1]] && a === vals[line[k + 2]]) { bad.add(line[k]); bad.add(line[k + 1]); bad.add(line[k + 2]); }
       }
-    }
-    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
-      const v = at(r, c); if (!v) continue;
-      const cr = cons.right[r][c], o = c < N - 1 ? at(r, c + 1) : 0;
-      if (cr && o && (cr === 'eq' ? o !== v : o === v)) { bad.add(r * N + c); bad.add(r * N + c + 1); }
-      const cd = cons.down[r][c], p = r < N - 1 ? at(r + 1, c) : 0;
-      if (cd && p && (cd === 'eq' ? p !== v : p === v)) { bad.add(r * N + c); bad.add((r + 1) * N + c); }
-    }
+      for (let k = 0; k < N - 1; k++) {
+        const i = line[k], j = line[k + 1];
+        const r = Math.floor(i / N), c = i % N;
+        const t = j === i + 1 ? cons.right[r][c] : cons.down[r][c];
+        if (t && (t === 'eq' ? vals[i] !== vals[j] : vals[i] === vals[j])) { bad.add(i); bad.add(j); }
+      }
+    };
+    for (let r = 0; r < N; r++) check([...Array(N).keys()].map((c) => r * N + c));
+    for (let c = 0; c < N; c++) check([...Array(N).keys()].map((r) => r * N + c));
     let filled = 0;
     for (let i = 0; i < N * N; i++) {
       cells[i].innerHTML = vals[i] === 1 ? SUN : vals[i] === 2 ? MOON : '';

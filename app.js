@@ -8,6 +8,7 @@ const $ = (s) => document.querySelector(s);
 const els = {
   tabs: $('#tabs'), timer: $('#timer'), size: $('#size'), newBtn: $('#new'),
   board: $('#board'), actions: $('#actions'), rules: $('#rules'), seed: $('#seed'),
+  cover: $('#cover'), coverTitle: $('#cover-title'), coverSub: $('#cover-sub'), coverBtn: $('#cover-btn'),
   modal: $('#modal'), modalTitle: $('#modal-title'), modalSub: $('#modal-sub'), modalClose: $('#modal-close'), modalNew: $('#modal-new'), confetti: $('#confetti'),
 };
 
@@ -43,9 +44,23 @@ function pauseTimer() {
   clearInterval(tick); tick = null;
   save();
 }
+function cover(label) {
+  els.coverTitle.textContent = current.game.name;
+  els.coverSub.textContent = current.size ? current.size + '×' + current.size : '';
+  els.coverBtn.textContent = label;
+  els.cover.hidden = false;
+  els.board.classList.add('covered');
+}
+function uncover() {
+  els.cover.hidden = true;
+  els.board.classList.remove('covered');
+  startTimer();
+}
+els.coverBtn.onclick = uncover;
+// Leaving the tab pauses the clock and hides the board until Resume.
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) pauseTimer();
-  else if (current && current.touched && !current.solved) startTimer();
+  if (!current || current.solved) return;
+  if (document.hidden) { pauseTimer(); cover('Resume'); }
 });
 
 const PRAISE = ['Nice work!', 'Crushed it!', 'Flawless.', 'Good job!', 'Brilliant!', 'Too easy?'];
@@ -100,7 +115,7 @@ function newPuzzle(game, seed, size, saved) {
   current = {
     game, puzzle, seed, size,
     state: saved ? saved.state : null, elapsed: saved ? saved.elapsed || 0 : 0,
-    solved: saved ? !!saved.solved : false, startedAt: null, touched: !!saved,
+    solved: saved ? !!saved.solved : false, startedAt: null,
   };
   els.board.innerHTML = ''; els.actions.innerHTML = '';
   els.board.classList.toggle('solved', current.solved);
@@ -109,7 +124,6 @@ function newPuzzle(game, seed, size, saved) {
   const api = {
     onChange(state) {
       current.state = state;
-      if (!current.solved) { current.touched = true; startTimer(); }
       save();
     },
     onWin() {
@@ -128,6 +142,8 @@ function newPuzzle(game, seed, size, saved) {
   game.mount(els.board, puzzle, api, current.state);
   renderTimer();
   save();
+  if (current.solved) { els.cover.hidden = true; els.board.classList.remove('covered'); }
+  else cover(current.elapsed > 0 ? 'Resume' : 'Start game');
 }
 
 function selectGame(id) {
