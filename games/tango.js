@@ -8,6 +8,9 @@ export const rules = 'Fill the grid with suns and moons so each row and column h
 const N = 6;
 const SUN = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="#f5a623"/></svg>';
 const MOON = '<svg viewBox="0 0 24 24"><path d="M14.8 3.3a8.7 8.7 0 1 0 6 15.4 10.2 10.2 0 0 1-6-15.4z" fill="#5b7cc4"/></svg>';
+const EQ = '<svg viewBox="0 0 10 10"><path d="M1.5 3.3h7M1.5 6.7h7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+const NE = '<svg viewBox="0 0 10 10"><path d="M2 2l6 6M8 2l-6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+
 const makeCons = () => ({
   right: Array.from({ length: N }, () => new Array(N).fill(null)),
   down: Array.from({ length: N }, () => new Array(N).fill(null)),
@@ -135,6 +138,52 @@ function grade(given, cons) {
   return null;
 }
 
+// One deduction from the current board under direct rules: returns the cell index, or -1.
+function nextDirect(vals, cons) {
+  const before = vals.slice();
+  const g = before.slice();
+  try {
+    const r = gradeStep(g, cons);
+    if (!r) return -1;
+  } catch { return -1; }
+  for (let i = 0; i < N * N; i++) if (!before[i] && g[i]) return i;
+  return -1;
+}
+// Applies direct rules once to g in place; returns whether anything changed. Throws on contradiction.
+function gradeStep(g, cons) {
+  const other = (v) => 3 - v;
+  const setv = (i, v) => { if (g[i] && g[i] !== v) throw 0; g[i] = v; };
+  let changed = false;
+  const lines = [];
+  for (let k = 0; k < N; k++) { lines.push([...Array(N).keys()].map((c) => k * N + c)); lines.push([...Array(N).keys()].map((r) => r * N + k)); }
+  for (const line of lines) {
+    for (let k = 0; k < N - 1; k++) {
+      const a = g[line[k]], b = g[line[k + 1]];
+      if (a && a === b) {
+        if (k > 0 && !g[line[k - 1]]) { setv(line[k - 1], other(a)); changed = true; }
+        if (k + 2 < N && !g[line[k + 2]]) { setv(line[k + 2], other(a)); changed = true; }
+      }
+      if (k + 2 < N) { const c2 = g[line[k + 2]]; if (a && a === c2 && !g[line[k + 1]]) { setv(line[k + 1], other(a)); changed = true; } }
+    }
+    for (const v of [1, 2]) {
+      const cnt = line.filter((i) => g[i] === v).length;
+      if (cnt === N / 2) for (const i of line) if (!g[i]) { setv(i, other(v)); changed = true; }
+    }
+  }
+  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+    const i = r * N + c;
+    const pairs = [];
+    if (cons.right[r][c]) pairs.push([cons.right[r][c], i + 1]);
+    if (cons.down[r][c]) pairs.push([cons.down[r][c], i + N]);
+    for (const [t, j] of pairs) {
+      const a = g[i], b = g[j];
+      if (a && !b) { setv(j, t === 'eq' ? a : other(a)); changed = true; }
+      else if (!a && b) { setv(i, t === 'eq' ? b : other(b)); changed = true; }
+    }
+  }
+  return changed;
+}
+
 const FITS = {
   easy: (g) => g.level === 1,
   medium: (g) => g.level === 2 && g.deep <= 3,
@@ -199,13 +248,13 @@ export function mount(root, puzzle, api, saved) {
   for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
     if (cons.right[r][c]) {
       const s = document.createElement('div');
-      s.className = 'con'; s.textContent = cons.right[r][c] === 'eq' ? '=' : '×';
+      s.className = 'con'; s.innerHTML = cons.right[r][c] === 'eq' ? EQ : NE;
       s.style.left = ((c + 1) / N) * 100 + '%'; s.style.top = ((r + 0.5) / N) * 100 + '%';
       overlay.appendChild(s);
     }
     if (cons.down[r][c]) {
       const s = document.createElement('div');
-      s.className = 'con'; s.textContent = cons.down[r][c] === 'eq' ? '=' : '×';
+      s.className = 'con'; s.innerHTML = cons.down[r][c] === 'eq' ? EQ : NE;
       s.style.left = ((c + 0.5) / N) * 100 + '%'; s.style.top = ((r + 1) / N) * 100 + '%';
       overlay.appendChild(s);
     }
@@ -268,6 +317,17 @@ export function mount(root, puzzle, api, saved) {
     if (api.isSolved()) return;
     for (let i = 0; i < N * N; i++) vals[i] = given[i];
     render(); api.onChange({ vals });
+  });
+  api.addAction('Hint', () => {
+    if (api.isSolved()) return;
+    const wrong = vals.findIndex((v, i) => v && v !== puzzle.solution[i]);
+    if (wrong >= 0) { api.hint([cells[wrong]], 'This cell is wrong.'); return; }
+    const i = nextDirect(vals, cons);
+    if (i >= 0) { api.hint([cells[i]], 'This cell can be worked out from its row, column or a nearby hint.'); return; }
+    const empties = vals.map((v, k) => (v ? -1 : k)).filter((k) => k >= 0);
+    if (!empties.length) return;
+    const k = empties[Math.floor(empties.length / 2)];
+    api.hint([cells[k]], 'Try both symbols here. One of them leads to a contradiction.');
   });
   render();
 }

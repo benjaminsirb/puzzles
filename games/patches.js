@@ -240,13 +240,14 @@ export function mount(root, puzzle, api, saved) {
     el.style.width = (rc.w / n) * 100 + '%'; el.style.height = (rc.h / n) * 100 + '%';
   };
   const owner = new Int16Array(N);
+  const patchEls = [];
   function render() {
     overlay.innerHTML = '';
-    owner.fill(-1);
+    owner.fill(-1); patchEls.length = 0;
     patches.forEach((p, pi) => {
       const el = document.createElement('div');
       el.className = 'patch'; el.style.background = PALETTE[p.ci % PALETTE.length];
-      place(el, p); overlay.appendChild(el);
+      place(el, p); overlay.appendChild(el); patchEls.push(el);
       for (let r = p.r; r < p.r + p.h; r++) for (let c = p.c; c < p.c + p.w; c++) owner[r * n + c] = pi;
     });
     let covered = 0;
@@ -304,6 +305,29 @@ export function mount(root, puzzle, api, saved) {
   grid.addEventListener('pointerup', finish);
   grid.addEventListener('pointercancel', () => { anchor = null; preview.style.display = 'none'; });
   api.addAction('Clear', () => { if (api.isSolved()) return; patches = []; commit(); });
+  const cellEls = [...grid.children];
+  api.addAction('Hint', () => {
+    if (api.isSolved()) return;
+    const sol = puzzle.solution;
+    const same = (a, b) => a.r === b.r && a.c === b.c && a.h === b.h && a.w === b.w;
+    const wrong = patches.findIndex((p) => !sol.some((rc) => same(rc, p)));
+    if (wrong >= 0) { api.hint([patchEls[wrong]], 'This patch is wrong. Tap it to remove it.'); return; }
+    const placed = new Set(patches.map((p) => p.ci));
+    const free = (rc) => { for (let r = rc.r; r < rc.r + rc.h; r++) for (let c = rc.c; c < rc.c + rc.w; c++) if (owner[r * n + c] >= 0) return false; return true; };
+    const open = clues.map((cl, ci) => (placed.has(ci) ? null : candidates(n, clues, ci).filter(free)));
+    const single = open.findIndex((list) => list && list.length === 1);
+    if (single >= 0) { const cl = clues[single]; api.hint([cellEls[cl.r * n + cl.c]], 'This clue has only one possible rectangle.'); return; }
+    const reach = Array.from({ length: N }, () => new Set());
+    open.forEach((list, ci) => { if (list) for (const rc of list) for (let r = rc.r; r < rc.r + rc.h; r++) for (let c = rc.c; c < rc.c + rc.w; c++) reach[r * n + c].add(ci); });
+    for (let i = 0; i < N; i++) {
+      if (owner[i] >= 0 || reach[i].size !== 1) continue;
+      const ci = [...reach[i]][0], cl = clues[ci];
+      api.hint([cellEls[i], cellEls[cl.r * n + cl.c]], 'Only one clue can reach this cell.'); return;
+    }
+    let best = -1;
+    open.forEach((list, ci) => { if (list && (best < 0 || list.length < open[best].length)) best = ci; });
+    if (best >= 0) { const cl = clues[best]; api.hint([cellEls[cl.r * n + cl.c]], 'Start with this clue. It has the fewest options.'); }
+  });
   render();
 }
 

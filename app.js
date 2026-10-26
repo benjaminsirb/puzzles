@@ -31,7 +31,7 @@ const GAMES = [queens, tango, zip, patches];
 const $ = (s) => document.querySelector(s);
 const els = {
   home: $('#home'), gameView: $('#game'), tiles: $('#tiles'), homeBtn: $('#home-btn'), title: $('#title'), statsHome: $('#stats-home'), timer: $('#timer'), size: $('#size'), newBtn: $('#new'),
-  board: $('#board'), actions: $('#actions'), rules: $('#rules'), seed: $('#seed'), statsBtn: $('#stats'),
+  board: $('#board'), actions: $('#actions'), hintmsg: $('#hintmsg'), rules: $('#rules'), seed: $('#seed'), statsBtn: $('#stats'),
   results: $('#results'), rGames: $('#results-games'), rSizes: $('#results-sizes'), rTiles: $('#results-tiles'), rChart: $('#results-chart'), rTip: $('#results-tip'), rTable: $('#results-table'), rClose: $('#results-close'), rClear: $('#results-clear'), modalResults: $('#modal-results'),
   cover: $('#cover'), coverTitle: $('#cover-title'), coverSub: $('#cover-sub'), coverBtn: $('#cover-btn'),
   modal: $('#modal'), modalTitle: $('#modal-title'), modalSub: $('#modal-sub'), modalClose: $('#modal-close'), modalNew: $('#modal-new'), confetti: $('#confetti'),
@@ -39,6 +39,7 @@ const els = {
 
 let current = null;
 let tick = null;
+let hintTimer = null;
 
 const key = (id) => 'puzzles.' + id;
 const randomSeed = () => Math.floor(Math.random() * 2 ** 31);
@@ -145,7 +146,7 @@ function newPuzzle(game, seed, diff, saved, replay, ready) {
     elapsed: replay ? replay.ms : saved ? saved.elapsed || 0 : 0,
     solved: replay ? true : saved ? !!saved.solved : false, startedAt: null,
   };
-  els.board.innerHTML = ''; els.actions.innerHTML = '';
+  els.board.innerHTML = ''; els.actions.innerHTML = ''; els.hintmsg.hidden = true;
   els.board.classList.toggle('solved', current.solved);
   els.rules.textContent = game.rules;
   els.seed.textContent = replay
@@ -164,6 +165,16 @@ function newPuzzle(game, seed, diff, saved, replay, ready) {
       celebrate(current.elapsed);
     },
     isSolved: () => current.solved,
+    // Pulse some elements and show a short message; the game decides what to point at.
+    hint(elements, message) {
+      if (current.solved) return;
+      for (const el of els.board.querySelectorAll('.hint')) el.classList.remove('hint');
+      for (const el of elements) { el.classList.remove('hint'); void el.offsetWidth; el.classList.add('hint'); }
+      els.hintmsg.textContent = message; els.hintmsg.hidden = false;
+      clearTimeout(hintTimer);
+      hintTimer = setTimeout(() => { els.hintmsg.hidden = true; for (const el of elements) el.classList.remove('hint'); }, 3200);
+      startTimer();
+    },
     addAction(label, fn) {
       const b = document.createElement('button');
       b.className = 'btn ghost'; b.textContent = label; b.onclick = fn;

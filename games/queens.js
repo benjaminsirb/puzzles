@@ -270,7 +270,7 @@ export function mount(root, puzzle, api, saved) {
   root.appendChild(grid);
 
   // Cells a queen at i rules out: same row, column, region, or touching.
-  const attacked = (i) => {
+  const attacked_ = (i) => {
     const r = Math.floor(i / n), c = i % n, out = [];
     for (let j = 0; j < n * n; j++) {
       if (j === i) continue;
@@ -283,7 +283,7 @@ export function mount(root, puzzle, api, saved) {
   function refreshAuto() {
     for (let i = 0; i < n * n; i++) if (marks[i] === 3) marks[i] = 0;
     if (!autoX) return;
-    for (let i = 0; i < n * n; i++) if (marks[i] === 2) for (const j of attacked(i)) if (marks[j] === 0) marks[j] = 3;
+    for (let i = 0; i < n * n; i++) if (marks[i] === 2) for (const j of attacked_(i)) if (marks[j] === 0) marks[j] = 3;
   }
 
   function render() {
@@ -356,6 +356,27 @@ export function mount(root, puzzle, api, saved) {
     refreshAuto(); render(); api.onChange({ marks });
   });
   toggle.textContent = 'Auto-X: ' + (autoX ? 'on' : 'off');
+  api.addAction('Hint', () => {
+    if (api.isSolved()) return;
+    const sol = puzzle.solution;
+    for (let i = 0; i < n * n; i++) if (marks[i] === 2 && sol[Math.floor(i / n)] !== i % n) { api.hint([cells[i]], 'This queen is misplaced.'); return; }
+    const attacked = new Set();
+    const queenRows = new Set(), queenCols = new Set(), queenRegs = new Set();
+    for (let i = 0; i < n * n; i++) if (marks[i] === 2) { for (const j of attacked_(i)) attacked.add(j); queenRows.add(Math.floor(i / n)); queenCols.add(i % n); queenRegs.add(region[Math.floor(i / n)][i % n]); }
+    const cand = (i) => marks[i] !== 1 && marks[i] !== 2 && !attacked.has(i);
+    const lines = [];
+    for (let r = 0; r < n; r++) if (!queenRows.has(r)) lines.push({ name: 'row', cells: [...Array(n).keys()].map((c) => r * n + c) });
+    for (let c = 0; c < n; c++) if (!queenCols.has(c)) lines.push({ name: 'column', cells: [...Array(n).keys()].map((r) => r * n + c) });
+    for (let g = 0; g < n; g++) if (!queenRegs.has(g)) lines.push({ name: 'region', cells: [...Array(n * n).keys()].filter((i) => region[Math.floor(i / n)][i % n] === g) });
+    for (const ln of lines) ln.open = ln.cells.filter(cand);
+    lines.sort((a, b) => a.open.length - b.open.length);
+    const single = lines.find((ln) => ln.open.length === 1);
+    if (single) { api.hint(single.cells.map((i) => cells[i]), 'Only one cell in this ' + single.name + ' can take a queen.'); return; }
+    for (const ln of lines) {
+      const bad = ln.open.find((i) => sol[Math.floor(i / n)] !== i % n);
+      if (bad != null) { api.hint([cells[bad]], 'A queen cannot go here. Mark it with an X.'); return; }
+    }
+  });
   render();
 }
 

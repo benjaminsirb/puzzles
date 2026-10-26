@@ -262,6 +262,14 @@ export function mount(root, puzzle, api, saved) {
   const end = () => { dragging = false; };
   grid.addEventListener('pointerup', end); grid.addEventListener('pointercancel', end);
   api.addAction('Clear', () => { if (api.isSolved()) return; path = []; commit(); });
+  api.addAction('Hint', () => {
+    if (api.isSolved()) return;
+    const sol = puzzle.solution;
+    const k = path.findIndex((cell, idx) => cell !== sol[idx]);
+    if (k >= 0) { api.hint([cells[path[k]]], 'The path goes wrong here. Back up to the cell before it.'); return; }
+    if (path.length >= N) return;
+    api.hint([cells[sol[path.length]]], path.length ? 'The path continues here.' : 'Start from 1, here.');
+  });
   render();
 }
 

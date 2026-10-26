@@ -81,7 +81,12 @@ main { padding: 12px 16px calc(24px + env(safe-area-inset-bottom)); max-width: 5
 .cell svg { width: 62%; height: 62%; display: block; }
 .cell.error { box-shadow: inset 0 0 0 3px var(--error); z-index: 1; }
 .overlay { position: absolute; inset: 0; pointer-events: none; }
-.actions { display: flex; gap: 8px; justify-content: center; margin: 14px 0 4px; min-height: 36px; }
+.actions { display: flex; gap: 8px; justify-content: center; margin: 14px 0 4px; min-height: 36px; flex-wrap: wrap; }
+.hintmsg { text-align: center; color: var(--accent); font-weight: 600; font-size: 14px; margin: 10px 0 -6px; animation: fade .2s ease-out; }
+.hintmsg[hidden] { display: none; }
+@keyframes hintpulse { 0%, 100% { box-shadow: inset 0 0 0 0 var(--accent); } 50% { box-shadow: inset 0 0 0 4px var(--accent); } }
+.cell.hint { animation: hintpulse .9s ease-in-out 3; z-index: 2; }
+.patches .patch.hint { animation: hintpulse .9s ease-in-out 3; }
 .rules { color: var(--muted); font-size: 14px; line-height: 1.45; text-align: center; margin: 8px 0; }
 .seed { color: var(--muted); font-size: 12px; text-align: center; margin: 0; }
 /* Solved celebration */
@@ -164,8 +169,9 @@ main { padding: 12px 16px calc(24px + env(safe-area-inset-bottom)); max-width: 5
 .tango .con {
   position: absolute; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%;
   background: var(--card); border: 1.5px solid var(--line); color: var(--fg);
-  font-size: 12px; line-height: 15px; text-align: center; font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
 }
+.tango .con svg { width: 10px; height: 10px; display: block; }
 
 /* Zip */
 .zip .cell.wr { border-right: 3px solid var(--line); }
