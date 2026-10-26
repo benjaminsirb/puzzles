@@ -104,11 +104,11 @@ export function generate(seed, size) {
   const n = size || defaultSize;
   const rng = makeRng(seed);
   let last = null;
-  for (let attempt = 0; attempt < 400; attempt++) {
+  for (let attempt = 0; attempt < 2000; attempt++) {
     const rects = partition(n, rng);
     const singles = rects.filter((x) => x.h * x.w === 1).length;
     const small = rects.filter((x) => x.h * x.w <= 2).length;
-    if (singles > 1 || small > 2 || rects.length < n - 1 || rects.length > n + 3) continue;
+    if (singles > 0 || small > 2 || rects.length < n - 1 || rects.length > n + 3) continue;
     const clues = rects.map((rc) => ({
       r: rc.r + rng.int(rc.h), c: rc.c + rng.int(rc.w), area: rc.h * rc.w,
       shape: rng.chance(0.45) ? shapeOf(rc.h, rc.w) : 'any', truth: shapeOf(rc.h, rc.w),

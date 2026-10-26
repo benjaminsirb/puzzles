@@ -2,12 +2,14 @@ import * as queens from './games/queens.js';
 import * as tango from './games/tango.js';
 import * as zip from './games/zip.js';
 import * as patches from './games/patches.js';
+import * as history from './lib/history.js';
 
 const GAMES = [queens, tango, zip, patches];
 const $ = (s) => document.querySelector(s);
 const els = {
   tabs: $('#tabs'), timer: $('#timer'), size: $('#size'), newBtn: $('#new'),
-  board: $('#board'), actions: $('#actions'), rules: $('#rules'), seed: $('#seed'),
+  board: $('#board'), actions: $('#actions'), rules: $('#rules'), seed: $('#seed'), statsBtn: $('#stats'),
+  results: $('#results'), rGames: $('#results-games'), rSizes: $('#results-sizes'), rTiles: $('#results-tiles'), rChart: $('#results-chart'), rTip: $('#results-tip'), rTable: $('#results-table'), rClose: $('#results-close'), rClear: $('#results-clear'), modalResults: $('#modal-results'),
   cover: $('#cover'), coverTitle: $('#cover-title'), coverSub: $('#cover-sub'), coverBtn: $('#cover-btn'),
   modal: $('#modal'), modalTitle: $('#modal-title'), modalSub: $('#modal-sub'), modalClose: $('#modal-close'), modalNew: $('#modal-new'), confetti: $('#confetti'),
 };
@@ -129,6 +131,7 @@ function newPuzzle(game, seed, size, saved) {
     onWin() {
       if (current.solved) return;
       pauseTimer(); current.solved = true; save(); renderTimer();
+      history.add({ g: game.id, n: size || 0, seed, ms: Math.round(current.elapsed), at: Date.now() });
       els.board.classList.add('solved');
       celebrate(current.elapsed);
     },
@@ -171,9 +174,105 @@ for (const g of GAMES) {
 els.newBtn.onclick = () => newPuzzle(current.game, randomSeed(), current.size, null);
 els.modalNew.onclick = els.newBtn.onclick;
 els.modalClose.onclick = () => { els.modal.hidden = true; };
+els.modalResults.onclick = () => { els.modal.hidden = true; openResults(current.game.id, current.size); };
+els.statsBtn.onclick = () => openResults(current.game.id, current.size);
+els.rClose.onclick = () => { els.results.hidden = true; };
+els.results.addEventListener('click', (e) => { if (e.target === els.results) els.results.hidden = true; });
+els.rClear.onclick = () => { if (confirm('Delete all recorded solve times?')) { history.clear(); renderResults(); } };
 els.modal.addEventListener('click', (e) => { if (e.target === els.modal) els.modal.hidden = true; });
 els.size.onchange = () => newPuzzle(current.game, randomSeed(), +els.size.value, null);
 window.addEventListener('hashchange', () => { const id = location.hash.slice(1); if (id && id !== current.game.id) selectGame(id); });
+
+// ---- Results view ----
+let rSel = { game: 'queens', size: null };
+function openResults(gameId, size) {
+  rSel = { game: gameId, size: size || null };
+  els.results.hidden = false;
+  renderResults();
+}
+function pill(label, active, fn) {
+  const b = document.createElement('button');
+  b.textContent = label; b.classList.toggle('active', active); b.onclick = fn; return b;
+}
+function renderResults() {
+  const game = GAMES.find((g) => g.id === rSel.game);
+  els.rGames.innerHTML = '';
+  for (const g of GAMES) els.rGames.appendChild(pill(g.name, g.id === rSel.game, () => { rSel = { game: g.id, size: g.sizes ? g.defaultSize : null }; renderResults(); }));
+  els.rSizes.innerHTML = '';
+  if (game.sizes) {
+    if (!game.sizes.includes(rSel.size)) rSel.size = game.defaultSize;
+    for (const n of game.sizes) els.rSizes.appendChild(pill(n + '×' + n, n === rSel.size, () => { rSel.size = n; renderResults(); }));
+  } else rSel.size = null;
+  const list = history.filter(rSel.game, rSel.size == null ? 0 : rSel.size);
+  const st = history.stats(list);
+  els.rTiles.innerHTML = '';
+  for (const [k, v] of [['Solved', st ? st.count : 0], ['Best', st ? fmt(st.best) : '–'], ['Average', st ? fmt(st.avg) : '–'], ['Last 5', st ? fmt(st.last5) : '–']]) {
+    const t = document.createElement('div'); t.className = 'tile';
+    t.innerHTML = `<div class="v">${v}</div><div class="k">${k}</div>`;
+    els.rTiles.appendChild(t);
+  }
+  drawChart(list, st);
+  els.rTable.innerHTML = '';
+  for (const e of list.slice().reverse().slice(0, 50)) {
+    const tr = document.createElement('tr');
+    const d = new Date(e.at);
+    tr.innerHTML = `<td class="muted">${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} ${d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</td><td>${fmt(e.ms)}</td>`;
+    els.rTable.appendChild(tr);
+  }
+}
+function niceStep(range) {
+  const raw = range / 4;
+  for (const s of [5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600]) if (s >= raw) return s;
+  return 3600;
+}
+function drawChart(list, st) {
+  const svg = els.rChart;
+  const ns = 'http://www.w3.org/2000/svg';
+  const el = (tag, attrs, text) => { const e = document.createElementNS(ns, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (text != null) e.textContent = text; return e; };
+  svg.innerHTML = ''; els.rTip.hidden = true;
+  const W = 360, H = 200, padL = 40, padR = 12, padT = 14, padB = 24;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  if (!list.length) { svg.appendChild(el('text', { x: W / 2, y: H / 2, 'text-anchor': 'middle', class: 'empty' }, 'No solves yet. Finish a puzzle to start the chart.')); return; }
+  const secs = list.map((e) => e.ms / 1000);
+  const step = niceStep(Math.max(...secs));
+  const yMax = Math.max(step, Math.ceil(Math.max(...secs) / step) * step);
+  const x = (i) => list.length === 1 ? (padL + W - padR) / 2 : padL + (i / (list.length - 1)) * (W - padL - padR);
+  const y = (s) => padT + (1 - s / yMax) * (H - padT - padB);
+  for (let v = 0; v <= yMax; v += step) {
+    svg.appendChild(el('line', { x1: padL, x2: W - padR, y1: y(v), y2: y(v), class: 'grid-line' }));
+    svg.appendChild(el('text', { x: padL - 6, y: y(v) + 4, 'text-anchor': 'end', class: 'axis-label' }, fmt(v * 1000)));
+  }
+  svg.appendChild(el('text', { x: padL, y: H - 6, class: 'axis-label' }, 'first'));
+  svg.appendChild(el('text', { x: W - padR, y: H - 6, 'text-anchor': 'end', class: 'axis-label' }, 'latest'));
+  svg.appendChild(el('line', { x1: padL, x2: W - padR, y1: y(st.avg / 1000), y2: y(st.avg / 1000), class: 'avg' }));
+  svg.appendChild(el('text', { x: W - padR, y: y(st.avg / 1000) - 4, 'text-anchor': 'end', class: 'axis-label' }, 'avg ' + fmt(st.avg)));
+  if (list.length > 1) svg.appendChild(el('path', { d: secs.map((s, i) => (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(s).toFixed(1)).join(' '), class: 'series' }));
+  const bestIdx = secs.indexOf(Math.min(...secs));
+  const pts = secs.map((s, i) => { const c = el('circle', { cx: x(i), cy: y(s), r: 4, class: 'pt' + (i === bestIdx ? ' best' : '') }); svg.appendChild(c); return c; });
+  const cross = el('line', { x1: 0, x2: 0, y1: padT, y2: H - padB, class: 'cross' }); cross.style.display = 'none'; svg.appendChild(cross);
+  let hot = -1;
+  const show = (i) => {
+    if (i === hot) return;
+    if (hot >= 0) pts[hot].classList.remove('hot');
+    hot = i; pts[i].classList.add('hot');
+    cross.setAttribute('x1', x(i)); cross.setAttribute('x2', x(i)); cross.style.display = '';
+    const r = svg.getBoundingClientRect();
+    const d = new Date(list[i].at);
+    els.rTip.textContent = fmt(list[i].ms) + ' · ' + d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    els.rTip.style.left = (x(i) / W) * r.width + 'px';
+    els.rTip.style.top = (y(secs[i]) / H) * r.height + 'px';
+    els.rTip.hidden = false;
+  };
+  const onMove = (e) => {
+    const r = svg.getBoundingClientRect();
+    const px = ((e.clientX - r.left) / r.width) * W;
+    let best = 0, bd = Infinity;
+    for (let i = 0; i < list.length; i++) { const d = Math.abs(x(i) - px); if (d < bd) { bd = d; best = i; } }
+    show(best);
+  };
+  svg.onpointermove = onMove; svg.onpointerdown = onMove;
+  svg.onpointerleave = () => { if (hot >= 0) pts[hot].classList.remove('hot'); hot = -1; cross.style.display = 'none'; els.rTip.hidden = true; };
+}
 
 selectGame(location.hash.slice(1) || localStorage.getItem('puzzles.current') || 'queens');
 

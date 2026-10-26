@@ -24,6 +24,7 @@
     <div class="timer" id="timer">0:00</div>
     <div class="bar-right">
       <select id="size" class="size" hidden></select>
+      <button id="stats" class="btn ghost" title="Results">Stats</button>
       <button id="new" class="btn">New</button>
     </div>
   </div>
@@ -47,10 +48,28 @@
     <div class="trophy"><svg viewBox="0 0 24 24"><path d="M4 18h16l1.2-9-4.6 3.2L12 5l-4.6 7.2L2.8 9z"/><rect x="4" y="19" width="16" height="2.5" rx="1"/></svg></div>
     <h2 id="modal-title">Nice work!</h2>
     <p id="modal-sub"></p>
+    <button id="modal-results" class="link">View results</button>
     <div class="row">
       <button id="modal-close" class="btn ghost">Close</button>
       <button id="modal-new" class="btn">New puzzle</button>
     </div>
+  </div>
+</div>
+<div id="results" class="modal" hidden>
+  <div class="card wide">
+    <div class="results-head">
+      <h2>Results</h2>
+      <button id="results-close" class="btn ghost small">Close</button>
+    </div>
+    <div class="pills" id="results-games"></div>
+    <div class="pills" id="results-sizes"></div>
+    <div class="tiles" id="results-tiles"></div>
+    <div class="chart-wrap">
+      <svg id="results-chart" class="chart" viewBox="0 0 360 200" preserveAspectRatio="none"></svg>
+      <div id="results-tip" class="tip" hidden></div>
+    </div>
+    <div class="table-wrap"><table id="results-table" class="table"></table></div>
+    <button id="results-clear" class="link danger">Clear history</button>
   </div>
 </div>
 <script type="module" src="app.js"></script>
