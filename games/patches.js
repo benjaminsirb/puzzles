@@ -4,7 +4,7 @@ export const id = 'patches';
 export const name = 'Patches';
 export const levels = ['easy', 'medium', 'hard'];
 const SIZE = { easy: 5, medium: 6, hard: 7 };
-export const rules = 'Divide the grid into rectangles so every rectangle holds exactly one clue. The number is the area. The icon is the shape: square, tall, wide, or dashed for any rectangle. Drag from one corner to the opposite corner to draw a patch. Tap a patch to remove it.';
+export const rules = 'Divide the grid into rectangles so every rectangle holds exactly one clue. The number is the area. The icon is the shape: square, tall, wide, or dashed for any rectangle. Drag from one corner to the opposite corner, or tap the two corners, to draw a patch. Tap a patch to remove it.';
 
 const PALETTE = ['#f7b8b8', '#fbd59f', '#f8f1a0', '#bfe8b5', '#aee0ee', '#c3c6f5', '#e8bdee', '#dccfbd', '#b2e8d6', '#f5c3df', '#ffd6a5', '#caffbf'];
 const ICONS = {
@@ -268,43 +268,58 @@ export function mount(root, puzzle, api, saved) {
     return ci;
   }
   function cellAt(e) {
-    const b = grid.getBoundingClientRect();
-    const c = Math.min(n - 1, Math.max(0, Math.floor(((e.clientX - b.left) / b.width) * n)));
-    const r = Math.min(n - 1, Math.max(0, Math.floor(((e.clientY - b.top) / b.height) * n)));
+    // Measure from the first cell, not the grid rect: the grid border would skew every boundary.
+    const b = grid.children[0].getBoundingClientRect();
+    const c = Math.min(n - 1, Math.max(0, Math.floor((e.clientX - b.left) / b.width)));
+    const r = Math.min(n - 1, Math.max(0, Math.floor((e.clientY - b.top) / b.height)));
     return [r, c];
   }
   const box = (a, b) => ({ r: Math.min(a[0], b[0]), c: Math.min(a[1], b[1]), h: Math.abs(a[0] - b[0]) + 1, w: Math.abs(a[1] - b[1]) + 1 });
   function commit() { const win = render(); api.onChange({ patches }); if (win) api.onWin(); }
 
-  let anchor = null;
+  // A gesture runs from one corner to the other: press-drag-release, or tap a corner (it stays
+  // armed) and tap the opposite one; tap the armed corner again to cancel. Only the pointer that
+  // started the gesture drives it, so a stray second finger never eats a patch or the drag.
+  let anchor = null, pid = null, armed = false;
+  const cancel = () => { anchor = null; pid = null; armed = false; preview.style.display = 'none'; };
   grid.addEventListener('pointerdown', (e) => {
-    if (api.isSolved()) return;
+    if (api.isSolved() || pid !== null) return;
     e.preventDefault();
     grid.setPointerCapture(e.pointerId);
+    pid = e.pointerId;
+    armed = !!anchor;
     const [r, c] = cellAt(e);
-    const o = owner[r * n + c];
-    if (o >= 0) { patches.splice(o, 1); commit(); return; }
-    anchor = [r, c];
-    const rc = box(anchor, anchor);
-    preview.classList.toggle('bad', validate(rc) < 0);
+    if (!anchor) {
+      const o = owner[r * n + c];
+      if (o >= 0) { pid = null; patches.splice(o, 1); commit(); return; }
+      anchor = [r, c];
+    }
+    const rc = box(anchor, [r, c]);
+    preview.classList.toggle('bad', rc.h * rc.w > 1 && validate(rc) < 0);
     place(preview, rc); preview.style.display = '';
   });
   grid.addEventListener('pointermove', (e) => {
-    if (!anchor) return;
+    if (!anchor || pid === null || e.pointerId !== pid) return;
     const rc = box(anchor, cellAt(e));
-    preview.classList.toggle('bad', validate(rc) < 0);
+    preview.classList.toggle('bad', rc.h * rc.w > 1 && validate(rc) < 0);
     place(preview, rc);
   });
-  const finish = (e) => {
+  grid.addEventListener('pointerup', (e) => {
+    if (pid === null || e.pointerId !== pid) return;
+    pid = null;
     if (!anchor) return;
     const rc = box(anchor, cellAt(e));
-    anchor = null; preview.style.display = 'none';
+    if (rc.h === 1 && rc.w === 1) {
+      if (armed) cancel();            // a tap on the armed corner disarms it
+      else preview.classList.remove('bad'); // a plain tap arms the corner; the next tap finishes
+      return;
+    }
+    anchor = null; armed = false; preview.style.display = 'none';
     const ci = validate(rc);
     if (ci >= 0) { patches.push({ ...rc, ci }); commit(); }
-  };
-  grid.addEventListener('pointerup', finish);
-  grid.addEventListener('pointercancel', () => { anchor = null; preview.style.display = 'none'; });
-  api.addAction('Clear', () => { if (api.isSolved()) return; patches = []; commit(); });
+  });
+  grid.addEventListener('pointercancel', (e) => { if (pid === null || e.pointerId === pid) cancel(); });
+  api.addAction('Clear', () => { if (api.isSolved()) return; patches = []; cancel(); commit(); });
   const cellEls = [...grid.children];
   api.addAction('Hint', () => {
     if (api.isSolved()) return;
