@@ -250,6 +250,11 @@ export { grade as _grade };
 export function mount(root, puzzle, api, saved) {
   const { n, region } = puzzle;
   const marks = saved && Array.isArray(saved.marks) && saved.marks.length === n * n ? saved.marks.slice() : new Array(n * n).fill(0);
+  // Undo stack of board snapshots, saved with the board so it survives a reload.
+  const undo = saved && Array.isArray(saved.undo) ? saved.undo.filter((u) => Array.isArray(u) && u.length === n * n) : [];
+  const UNDO_MAX = 80;
+  const snapshot = () => { undo.push(marks.slice()); if (undo.length > UNDO_MAX) undo.shift(); };
+  const changed = () => { api.onChange({ marks, undo }); undoBtn.disabled = !undo.length; };
   let autoX = localStorage.getItem(AUTO_KEY) !== 'off';
   const grid = document.createElement('div');
   grid.className = 'grid queens';
@@ -307,13 +312,14 @@ export function mount(root, puzzle, api, saved) {
   }
 
   function tap(i) {
+    snapshot();
     // empty -> X -> queen -> empty; an auto X goes straight to queen
     marks[i] = marks[i] === 0 ? 1 : marks[i] === 2 ? 0 : 2;
     if (marks[i] === 0) cleared.add(i);
     if (marks[i] === 2) cleared.clear();
     refreshAuto();
     const win = render();
-    api.onChange({ marks });
+    changed();
     if (win) api.onWin();
   }
   function cellAt(e) {
@@ -340,24 +346,32 @@ export function mount(root, puzzle, api, saved) {
     if (down < 0) return;
     const i = cellAt(e);
     if (i < 0 || i === last) return;
-    if (!dragged) { dragged = true; paint(down); }
+    if (!dragged) { dragged = true; snapshot(); paint(down); }
     paintLine(last, i);
     last = i;
   });
   const up = () => {
     if (down < 0) return;
-    if (dragged) api.onChange({ marks }); else tap(down);
+    if (dragged) changed(); else tap(down);
     down = -1; dragged = false;
   };
   grid.addEventListener('pointerup', up);
-  grid.addEventListener('pointercancel', () => { if (dragged) api.onChange({ marks }); down = -1; dragged = false; });
-  api.addAction('Clear', () => { if (api.isSolved()) return; marks.fill(0); render(); api.onChange({ marks }); });
+  grid.addEventListener('pointercancel', () => { if (dragged) changed(); down = -1; dragged = false; });
+  // Each press steps back one move: a tap, a drag, or a clear.
+  const undoBtn = api.addAction('Undo', () => {
+    if (api.isSolved() || !undo.length) return;
+    const prev = undo.pop();
+    for (let i = 0; i < n * n; i++) marks[i] = prev[i];
+    render(); changed();
+  });
+  undoBtn.disabled = !undo.length;
+  api.addAction('Clear', () => { if (api.isSolved() || !marks.some(Boolean)) return; snapshot(); marks.fill(0); render(); changed(); });
   const toggle = api.addAction('', () => {
     autoX = !autoX;
     localStorage.setItem(AUTO_KEY, autoX ? 'on' : 'off');
     toggle.textContent = 'Auto-X: ' + (autoX ? 'on' : 'off');
     if (api.isSolved()) return;
-    refreshAuto(); render(); api.onChange({ marks });
+    refreshAuto(); render(); changed();
   });
   toggle.textContent = 'Auto-X: ' + (autoX ? 'on' : 'off');
   api.addAction('Hint', () => {
