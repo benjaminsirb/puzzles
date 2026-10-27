@@ -31,6 +31,8 @@ main { flex: 1; min-height: 0; width: 100%; overflow-y: auto; overscroll-behavio
 .back[hidden] { display: none; }
 #stats-home { grid-column: 3; justify-self: end; }
 #stats-home[hidden] { display: none; }
+#share-top { grid-column: 3; justify-self: end; }
+#share-top[hidden] { display: none; }
 .home-sub { color: var(--muted); text-align: center; margin: 14px 0 18px; font-size: 15px; }
 .tiles-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .tile-game {

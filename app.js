@@ -34,7 +34,7 @@ const els = {
   board: $('#board'), actions: $('#actions'), hintmsg: $('#hintmsg'), rules: $('#rules'), seed: $('#seed'), statsBtn: $('#stats'),
   results: $('#results'), rGames: $('#results-games'), rSizes: $('#results-sizes'), rTiles: $('#results-tiles'), rChart: $('#results-chart'), rTip: $('#results-tip'), rTable: $('#results-table'), rClose: $('#results-close'), rClear: $('#results-clear'), modalResults: $('#modal-results'),
   cover: $('#cover'), coverTitle: $('#cover-title'), coverSub: $('#cover-sub'), coverBtn: $('#cover-btn'),
-  modal: $('#modal'), modalTitle: $('#modal-title'), modalSub: $('#modal-sub'), modalClose: $('#modal-close'), modalNew: $('#modal-new'), confetti: $('#confetti'),
+  modal: $('#modal'), modalTitle: $('#modal-title'), modalSub: $('#modal-sub'), modalClose: $('#modal-close'), modalNew: $('#modal-new'), modalShare: $('#modal-share'), shareTop: $('#share-top'), confetti: $('#confetti'),
 };
 
 let current = null;
@@ -50,7 +50,7 @@ function save() {
   if (!current || current.replay) return;
   try {
     localStorage.setItem(key(current.game.id), JSON.stringify({
-      seed: current.seed, diff: current.diff, state: current.state, elapsed: current.elapsed, solved: current.solved,
+      seed: current.seed, diff: current.diff, state: current.state, elapsed: current.elapsed, solved: current.solved, shared: current.shared || null,
     }));
   } catch { /* storage unavailable */ }
 }
@@ -72,9 +72,11 @@ function pauseTimer() {
   clearInterval(tick); tick = null;
   save();
 }
+// A puzzle opened from a share link remembers the sharer's time, when they had one.
+const sharedNote = () => current.shared ? (current.shared.ms ? ' · shared, solved in ' + fmt(current.shared.ms) : ' · shared with you') : '';
 function cover(text) {
   els.coverTitle.textContent = current.game.name;
-  els.coverSub.textContent = label(current.diff);
+  els.coverSub.textContent = label(current.diff) + sharedNote();
   els.coverBtn.textContent = text;
   els.cover.hidden = false;
   els.board.classList.add('covered');
@@ -100,7 +102,8 @@ function celebrate(ms) {
   confetti();
   setTimeout(() => {
     els.modalTitle.textContent = PRAISE[Math.floor(Math.random() * PRAISE.length)];
-    els.modalSub.textContent = 'Solved in ' + fmt(ms);
+    const theirs = current.shared && current.shared.ms;
+    els.modalSub.textContent = 'Solved in ' + fmt(ms) + (theirs ? (ms <= theirs ? ' · faster than ' : ' · they took ') + fmt(theirs) : '');
     els.modal.hidden = false;
   }, 900);
 }
@@ -136,12 +139,12 @@ function confetti() {
   requestAnimationFrame(frame);
 }
 
-function newPuzzle(game, seed, diff, saved, replay, ready) {
+function newPuzzle(game, seed, diff, saved, replay, ready, shared) {
   pauseTimer();
   els.modal.hidden = true;
   const puzzle = ready || game.generate(seed, diff);
   current = {
-    game, puzzle, seed, diff, replay: !!replay,
+    game, puzzle, seed, diff, replay: !!replay, shared: shared || (saved && saved.shared) || null,
     state: replay ? game.solvedState(puzzle) : saved ? saved.state : null,
     elapsed: replay ? replay.ms : saved ? saved.elapsed || 0 : 0,
     solved: replay ? true : saved ? !!saved.solved : false, startedAt: null,
@@ -151,7 +154,9 @@ function newPuzzle(game, seed, diff, saved, replay, ready) {
   els.rules.textContent = game.rules;
   els.seed.textContent = replay
     ? 'Replay · solved in ' + fmt(replay.ms) + ' on ' + new Date(replay.at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' · #' + seed
-    : '#' + seed + ' · ' + label(diff);
+    : '#' + seed + ' · ' + label(diff) + sharedNote();
+  // The address always names the puzzle on screen, so a reload or a copied link comes back to it.
+  if (!replay) history.replaceState(null, '', current.shared ? puzzleHash(current.shared.ms) : '#' + game.id);
   const api = {
     onChange(state) {
       current.state = state;
@@ -210,7 +215,7 @@ const TAGLINES = { queens: 'One queen per row, column and region.', tango: 'Suns
 function showHome() {
   pauseTimer();
   els.gameView.hidden = true; els.home.hidden = false;
-  els.homeBtn.hidden = true; els.statsHome.hidden = false;
+  els.homeBtn.hidden = true; els.statsHome.hidden = false; els.shareTop.hidden = true;
   els.title.textContent = 'Puzzles';
   els.modal.hidden = true;
   if (location.hash) history.replaceState(null, '', location.pathname);
@@ -225,15 +230,17 @@ function showHome() {
   }
 }
 
+function showGameView(game) {
+  els.home.hidden = true; els.gameView.hidden = false;
+  els.homeBtn.hidden = false; els.statsHome.hidden = true; els.shareTop.hidden = false;
+  els.title.textContent = game.name;
+  fillSelect(game);
+}
 function selectGame(id) {
   const game = GAMES.find((g) => g.id === id);
   if (!game) { showHome(); return; }
-  els.home.hidden = true; els.gameView.hidden = false;
-  els.homeBtn.hidden = false; els.statsHome.hidden = true;
-  els.title.textContent = game.name;
+  showGameView(game);
   localStorage.setItem('puzzles.current', game.id);
-  if (location.hash !== '#' + game.id) history.replaceState(null, '', '#' + game.id);
-  fillSelect(game);
   // Resume only a game that is started and unfinished; otherwise start fresh.
   const saved = load(game.id);
   const inProgress = saved && saved.seed != null && !saved.solved && saved.elapsed > 0 && LEVELS.includes(saved.diff);
@@ -241,23 +248,63 @@ function selectGame(id) {
   else newPuzzle(game, randomSeed(), resolveDiff(game), null);
 }
 
+// ---- Share links: #game/seed/difficulty[/sharer's ms] ----
+const puzzleHash = (ms) => '#' + current.game.id + '/' + current.seed + '/' + current.diff + (ms ? '/' + ms : '');
+// Your own time goes in the link once you have solved it; otherwise pass on the time you were sent.
+const shareHash = () => puzzleHash(current.solved ? Math.round(current.elapsed) : (current.shared && current.shared.ms) || 0);
+function parseShare(hash) {
+  const [id, seed, diff, ms] = hash.split('/');
+  const game = GAMES.find((g) => g.id === id);
+  if (!game || !/^\d{1,10}$/.test(seed || '') || !LEVELS.includes(diff)) return null;
+  return { game, seed: Number(seed), diff, ms: /^\d{1,9}$/.test(ms || '') ? Number(ms) : 0 };
+}
+// Open the puzzle a friend sent, fresh unless this device already has that very puzzle going.
+function openShared({ game, seed, diff, ms }) {
+  showGameView(game);
+  els.size.value = diff;
+  localStorage.setItem('puzzles.current', game.id);
+  const saved = load(game.id);
+  const same = saved && saved.seed === seed && saved.diff === diff;
+  newPuzzle(game, seed, diff, same ? saved : null, null, null, ms || !(same && saved.shared) ? { ms } : saved.shared);
+}
+async function share() {
+  if (!current) return;
+  const url = location.origin + location.pathname + shareHash();
+  const name = current.game.name + ' puzzle (' + label(current.diff) + ')';
+  const text = current.solved ? 'I solved this ' + name + ' in ' + fmt(current.elapsed) + '. Can you beat it?' : 'Try this ' + name + '.';
+  if (navigator.share) {
+    try { await navigator.share({ title: current.game.name, text, url }); return; } catch (e) { if (e && e.name === 'AbortError') return; }
+  }
+  try { await navigator.clipboard.writeText(url); toast('Link copied'); } catch { prompt('Copy this link', url); }
+}
+function toast(message) {
+  els.hintmsg.textContent = message; els.hintmsg.hidden = false;
+  clearTimeout(hintTimer);
+  hintTimer = setTimeout(() => { els.hintmsg.hidden = true; }, 2200);
+}
+els.shareTop.onclick = share;
+els.modalShare.onclick = share;
+
 // Show a past solve on its board, without touching the in-progress game.
 function replaySolve(entry) {
   const game = GAMES.find((g) => g.id === entry.g);
   if (!game || !LEVELS.includes(entry.d)) return;
   els.results.hidden = true;
-  els.home.hidden = true; els.gameView.hidden = false;
-  els.homeBtn.hidden = false; els.statsHome.hidden = true;
-  els.title.textContent = game.name;
+  showGameView(game);
   if (location.hash !== '#' + game.id) history.replaceState(null, '', '#' + game.id);
-  fillSelect(game);
   els.size.value = entry.d;
   newPuzzle(game, entry.seed, entry.d, null, { ms: entry.ms, at: entry.at });
 }
 
 function route() {
-  const id = location.hash.slice(1);
-  if (id && GAMES.some((g) => g.id === id)) { if (!current || current.game.id !== id || els.gameView.hidden) selectGame(id); }
+  const hash = location.hash.slice(1);
+  const shared = hash.includes('/') ? parseShare(hash) : null;
+  if (shared) {
+    const already = current && !els.gameView.hidden && current.game === shared.game && current.seed === shared.seed && current.diff === shared.diff;
+    if (!already) openShared(shared);
+    return;
+  }
+  if (hash && GAMES.some((g) => g.id === hash)) { if (!current || current.game.id !== hash || els.gameView.hidden) selectGame(hash); }
   else showHome();
 }
 els.homeBtn.onclick = () => { location.hash = ''; };
