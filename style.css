@@ -64,8 +64,8 @@ main { padding: 12px 16px calc(24px + env(safe-area-inset-bottom)); max-width: 5
   background: var(--card) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5l3.5 3.5 3.5-3.5' fill='none' stroke='%236b7280' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 11px center / 12px 12px;
 }
 .stage { width: min(100vw - 32px, 62vh, 480px); margin: 0 auto; position: relative; }
-.board { width: 100%; position: relative; transition: filter .3s; }
-.board.covered { filter: blur(10px); pointer-events: none; }
+.board { width: 100%; position: relative; transition: filter .3s, opacity .3s; }
+.board.covered { filter: blur(10px); opacity: 0; pointer-events: none; transition: none; } /* vanish at once, fade back in on start; a blur alone still shows the layout */
 .cover { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 5; background: color-mix(in srgb, var(--bg) 55%, transparent); border-radius: 6px; animation: fade .25s ease-out; }
 .cover[hidden] { display: none; }
 .cover-card { background: var(--card); border-radius: 18px; padding: 22px 26px; text-align: center; box-shadow: 0 12px 40px rgba(0,0,0,.25); min-width: 60%; }
