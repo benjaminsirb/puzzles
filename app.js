@@ -40,6 +40,7 @@ const els = {
 let current = null;
 let tick = null;
 let hintTimer = null;
+let celebrateTimer = null;
 
 const key = (id) => 'puzzles.' + id;
 const randomSeed = () => Math.floor(Math.random() * 2 ** 31);
@@ -96,11 +97,13 @@ document.addEventListener('visibilitychange', () => {
 const PRAISE = ['Nice work!', 'Crushed it!', 'Flawless.', 'Good job!', 'Brilliant!', 'Too easy?'];
 
 function celebrate(ms) {
-  // Stagger the pop of every solved piece on the board.
+  // Stagger the pop of every solved piece on the board; the cap keeps the wave ahead of the modal.
   const pieces = els.board.querySelectorAll('.queens .cell svg:not(.x), .tango .cell svg, .zip .num.hit, .patches .patch');
-  pieces.forEach((el, i) => { el.style.setProperty('--d', (i * 0.06) + 's'); });
-  confetti();
-  setTimeout(() => {
+  pieces.forEach((el, i) => { el.style.setProperty('--d', Math.min(i * 0.05, 0.3) + 's'); });
+  els.board.classList.add('celebrate');
+  if (!matchMedia('(prefers-reduced-motion: reduce)').matches) confetti();
+  clearTimeout(celebrateTimer);
+  celebrateTimer = setTimeout(() => {
     els.modalTitle.textContent = PRAISE[Math.floor(Math.random() * PRAISE.length)];
     const theirs = current.shared && current.shared.ms;
     els.modalSub.textContent = 'Solved in ' + fmt(ms) + (theirs ? (ms <= theirs ? ' · faster than ' : ' · they took ') + fmt(theirs) : '');
@@ -142,6 +145,8 @@ function confetti() {
 function newPuzzle(game, seed, diff, saved, replay, ready, shared) {
   pauseTimer();
   els.modal.hidden = true;
+  els.board.classList.remove('celebrate');
+  clearTimeout(celebrateTimer);
   const puzzle = ready || game.generate(seed, diff);
   current = {
     game, puzzle, seed, diff, replay: !!replay, shared: shared || (saved && saved.shared) || null,
