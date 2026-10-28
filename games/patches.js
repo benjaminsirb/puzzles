@@ -247,6 +247,9 @@ export function mount(root, puzzle, api, saved) {
     patches.forEach((p, pi) => {
       const el = document.createElement('div');
       el.className = 'patch'; el.style.background = PALETTE[p.ci % PALETTE.length];
+      // The win glimmer ripples out from the board centre: patches farther out light up later.
+      const d = Math.hypot(p.c + p.w / 2 - n / 2, p.r + p.h / 2 - n / 2) / Math.hypot(n / 2, n / 2);
+      el.style.setProperty('--sd', (d * 0.32).toFixed(3) + 's');
       place(el, p); overlay.appendChild(el); patchEls.push(el);
       for (let r = p.r; r < p.r + p.h; r++) for (let c = p.c; c < p.c + p.w; c++) owner[r * n + c] = pi;
     });

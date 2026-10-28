@@ -98,7 +98,8 @@ const PRAISE = ['Nice work!', 'Crushed it!', 'Flawless.', 'Good job!', 'Brillian
 
 function celebrate(ms) {
   // Stagger the pop of every solved piece on the board; the cap keeps the wave ahead of the modal.
-  const pieces = els.board.querySelectorAll('.queens .cell svg:not(.x), .tango .cell svg, .zip .num.hit, .patches .patch');
+  // Patches opt out: their win is the self-staggered glimmer, so they are not in this list.
+  const pieces = els.board.querySelectorAll('.queens .cell svg:not(.x), .tango .cell svg, .zip .num.hit');
   pieces.forEach((el, i) => { el.style.setProperty('--d', Math.min(i * 0.05, 0.3) + 's'); });
   els.board.classList.add('celebrate');
   if (!matchMedia('(prefers-reduced-motion: reduce)').matches) confetti();
