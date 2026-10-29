@@ -1,6 +1,6 @@
 // Atomic app-shell cache: every version precaches a complete, consistent set of files
 // and serves only from that set. A new version installs beside the old one, then takes over.
-const VERSION = 'v33';
+const VERSION = 'v34';
 const CACHE = 'puzzles-' + VERSION;
 const ASSETS = [
   './', './index.html', './style.css', './app.js', './lib/rng.js', './lib/history.js',

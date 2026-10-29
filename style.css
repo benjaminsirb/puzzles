@@ -164,8 +164,7 @@ main { padding: 12px 16px calc(24px + env(safe-area-inset-bottom)); max-width: 5
 /* Patches tile the whole board, so their win is a gold glimmer rippling out from the centre, */
 /* not a pop; afterwards the patches rest in their original colours. */
 @keyframes glimmer {
-  0%, 100% { border-color: rgba(27,31,42,.5); box-shadow: inset 0 0 0 2px rgba(255,255,255,.5); }
-  45% { border-color: var(--gold); box-shadow: inset 0 0 0 2px rgba(255,255,255,.65), inset 0 0 16px rgba(242,183,5,.5); }
+  45% { border-color: var(--gold); box-shadow: inset 0 0 0 3px rgba(255,255,255,.65), inset 0 0 16px rgba(242,183,5,.5); }
 }
 .celebrate .patches .patch { animation: glimmer .7s ease-in-out var(--sd, 0s) both; }
 @media (prefers-reduced-motion: reduce) {
@@ -205,13 +204,38 @@ main { padding: 12px 16px calc(24px + env(safe-area-inset-bottom)); max-width: 5
 .zip .path polyline { fill: none; stroke: var(--accent); stroke-width: .42; stroke-linecap: round; stroke-linejoin: round; opacity: .85; }
 .zip .path circle { fill: var(--accent); }
 
-/* Patches */
-.patches .cell { flex-direction: column; gap: 1px; }
-.patches .cell.cluecell { color: #1b1f2a; }
-.patches .cell { gap: 0; }
-.patches .clue { font-weight: 800; font-size: clamp(18px, 5.2vmin, 32px); line-height: 1; z-index: 2; position: relative; }
-.patches .icon { width: 46%; height: 30%; z-index: 2; position: relative; }
-.patches .icon svg { width: 100%; height: 100%; display: block; }
-.patches .patch { position: absolute; border: 2.5px solid rgba(27,31,42,.5); border-radius: 7px; opacity: .88; box-shadow: inset 0 0 0 2px rgba(255,255,255,.5); }
-.patches .preview { position: absolute; border: 2.5px dashed var(--accent); background: color-mix(in srgb, var(--accent) 25%, transparent); border-radius: 7px; pointer-events: none; }
+/* Patches: a white board with dashed cell lines; clues are soft coloured tiles shaped like their patch. */
+.patches { --pt-board: #ffffff; --pt-line: #cfd3d9; --pt-edge: #e3e5e9; background: var(--pt-board); border-radius: 14px; }
+@media (prefers-color-scheme: dark) { .patches { --pt-board: var(--cell); --pt-line: #444b59; --pt-edge: #3a404d; } }
+.patches .grid { position: relative; z-index: 1; background: transparent; border: 2.5px solid var(--pt-edge); border-radius: 14px; overflow: hidden; }
+.patches .cell { border: 0; border-right: 1.5px dashed var(--pt-line); border-bottom: 1.5px dashed var(--pt-line); }
+.patches .cell.lc { border-right: 0; }
+.patches .cell.lr { border-bottom: 0; }
+.patches .overlay { z-index: 0; }
+.patches .ptile {
+  position: relative; display: flex; align-items: center; justify-content: center;
+  background: var(--pc); border-radius: 10%; box-shadow: 0 3px 6px rgba(27,31,42,.12);
+}
+.patches .ptile.square { width: 60%; height: 60%; }
+.patches .ptile.tall { width: 50%; height: 74%; }
+.patches .ptile.wide { width: 74%; height: 50%; }
+.patches .ptile.any { width: 74%; height: 74%; background: none; box-shadow: none; }
+.patches .ptile .arm, .patches .ptile .core {
+  position: absolute; border: 1.5px dashed color-mix(in srgb, var(--pc) 70%, #000); border-radius: 12%;
+}
+.patches .ptile .arm { background: color-mix(in srgb, var(--pc) 55%, var(--pt-board)); }
+.patches .ptile .arm.v { left: 17%; right: 17%; top: 0; bottom: 0; }
+.patches .ptile .arm.h { top: 17%; bottom: 17%; left: 0; right: 0; }
+.patches .ptile .core { inset: 17%; background: var(--pc); border-radius: 6%; }
+.patches .clue {
+  position: relative; z-index: 1; color: #fff; font-weight: 600; line-height: 1;
+  font-size: clamp(18px, 6vmin, 36px); text-shadow: 0 1px 2px rgba(27,31,42,.18);
+}
+.patches .patch {
+  position: absolute; border-radius: 12px;
+  background: color-mix(in srgb, var(--pc) 24%, transparent);
+  border: 2px solid color-mix(in srgb, var(--pc) 70%, transparent);
+  box-shadow: inset 0 0 0 3px color-mix(in srgb, var(--pt-board) 60%, transparent);
+}
+.patches .preview { position: absolute; z-index: 2; border: 2.5px dashed var(--accent); background: color-mix(in srgb, var(--accent) 25%, transparent); border-radius: 7px; pointer-events: none; }
 .patches .preview.bad { border-color: var(--error); background: color-mix(in srgb, var(--error) 25%, transparent); }

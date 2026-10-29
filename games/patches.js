@@ -4,15 +4,10 @@ export const id = 'patches';
 export const name = 'Patches';
 export const levels = ['easy', 'medium', 'hard'];
 const SIZE = { easy: 5, medium: 6, hard: 7 };
-export const rules = 'Divide the grid into rectangles so every rectangle holds exactly one clue. The number is the area. The icon is the shape: square, tall, wide, or dashed for any rectangle. Drag from one corner to the opposite corner, or tap the two corners, to draw a patch. Tap a patch to remove it.';
+export const rules = 'Divide the grid into rectangles so every rectangle holds exactly one clue. The number is the area. The tile's outline is the shape: square, tall, wide, or a dashed plus for any rectangle. Drag from one corner to the opposite corner, or tap the two corners, to draw a patch. Tap a patch to remove it.';
 
-const PALETTE = ['#f7b8b8', '#fbd59f', '#f8f1a0', '#bfe8b5', '#aee0ee', '#c3c6f5', '#e8bdee', '#dccfbd', '#b2e8d6', '#f5c3df', '#ffd6a5', '#caffbf'];
-const ICONS = {
-  square: '<svg viewBox="0 0 20 20"><rect x="4" y="4" width="12" height="12" rx="1.5" fill="currentColor"/></svg>',
-  tall: '<svg viewBox="0 0 20 20"><rect x="6" y="2" width="8" height="16" rx="1.5" fill="currentColor"/></svg>',
-  wide: '<svg viewBox="0 0 20 20"><rect x="2" y="6" width="16" height="8" rx="1.5" fill="currentColor"/></svg>',
-  any: '<svg viewBox="0 0 20 20"><rect x="3" y="5" width="14" height="10" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-dasharray="2.5 2"/></svg>',
-};
+// Soft mid-tones that carry white numerals; a placed patch shows a pale wash of its clue's colour.
+const PALETTE = ['#4ba35d', '#d5b864', '#dc6662', '#a58cf5', '#4296a8', '#e9a066', '#4fa9f0', '#4a7f40', '#e08a6f', '#d27aa8', '#7f8fd6', '#52b39a'];
 
 function partition(n, rng, maxArea, stop) {
   const taken = new Uint8Array(n * n);
@@ -219,13 +214,18 @@ export function mount(root, puzzle, api, saved) {
   for (let i = 0; i < N; i++) {
     const d = document.createElement('div');
     d.className = 'cell';
+    if (i % n === n - 1) d.classList.add('lc');
+    if (i >= N - n) d.classList.add('lr');
     if (clueAt[i] >= 0) {
       const cl = clues[clueAt[i]];
       d.classList.add('cluecell');
-      d.style.background = PALETTE[clueAt[i] % PALETTE.length];
-      const num = document.createElement('div'); num.className = 'clue'; num.textContent = cl.area;
-      const ic = document.createElement('div'); ic.className = 'icon'; ic.innerHTML = ICONS[cl.shape];
-      d.appendChild(num); d.appendChild(ic);
+      // The tile's own outline is the shape clue: square, tall, wide, or a dashed plus for any shape.
+      const t = document.createElement('div');
+      t.className = 'ptile ' + cl.shape;
+      t.style.setProperty('--pc', PALETTE[clueAt[i] % PALETTE.length]);
+      if (cl.shape === 'any') t.innerHTML = '<i class="arm v"></i><i class="arm h"></i><i class="core"></i>';
+      const num = document.createElement('span'); num.className = 'clue'; num.textContent = cl.area;
+      t.appendChild(num); d.appendChild(t);
     }
     grid.appendChild(d);
   }
@@ -246,7 +246,7 @@ export function mount(root, puzzle, api, saved) {
     owner.fill(-1); patchEls.length = 0;
     patches.forEach((p, pi) => {
       const el = document.createElement('div');
-      el.className = 'patch'; el.style.background = PALETTE[p.ci % PALETTE.length];
+      el.className = 'patch'; el.style.setProperty('--pc', PALETTE[p.ci % PALETTE.length]);
       // The win glimmer ripples out from the board centre: patches farther out light up later.
       const d = Math.hypot(p.c + p.w / 2 - n / 2, p.r + p.h / 2 - n / 2) / Math.hypot(n / 2, n / 2);
       el.style.setProperty('--sd', (d * 0.32).toFixed(3) + 's');
