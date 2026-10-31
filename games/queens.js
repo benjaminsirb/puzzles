@@ -328,7 +328,8 @@ export function mount(root, puzzle, api, saved) {
     return r < 0 || c < 0 || r >= n || c >= n ? -1 : r * n + c;
   }
   // Press and drag paints an X on every empty cell passed over; a plain tap cycles the cell.
-  let down = -1, last = -1, dragged = false;
+  // Only the finger that started a press drives it; a stray touch never paints or taps.
+  let down = -1, last = -1, dragged = false, pid = null;
   const paint = (i) => { if (i >= 0 && marks[i] === 0) { marks[i] = 1; render(); } };
   // Fill every cell on the straight line between two cells so a fast swipe leaves no gaps.
   const paintLine = (a, b) => {
@@ -339,24 +340,30 @@ export function mount(root, puzzle, api, saved) {
   grid.addEventListener('pointerdown', (e) => {
     if (api.isSolved()) return;
     e.preventDefault();
-    grid.setPointerCapture(e.pointerId);
+    if (pid !== null && grid.hasPointerCapture(pid)) return;
+    pid = e.pointerId;
+    try { grid.setPointerCapture(e.pointerId); } catch {}
     down = last = cellAt(e); dragged = false;
   });
   grid.addEventListener('pointermove', (e) => {
-    if (down < 0) return;
+    if (down < 0 || e.pointerId !== pid) return;
     const i = cellAt(e);
     if (i < 0 || i === last) return;
     if (!dragged) { dragged = true; snapshot(); paint(down); }
     paintLine(last, i);
     last = i;
   });
-  const up = () => {
+  const up = (e) => {
+    if (e.pointerId !== pid) return;
+    pid = null;
     if (down < 0) return;
     if (dragged) changed(); else tap(down);
     down = -1; dragged = false;
   };
+  const drop = (e) => { if (e.pointerId !== pid) return; pid = null; if (dragged) changed(); down = -1; dragged = false; };
   grid.addEventListener('pointerup', up);
-  grid.addEventListener('pointercancel', () => { if (dragged) changed(); down = -1; dragged = false; });
+  grid.addEventListener('pointercancel', drop);
+  grid.addEventListener('lostpointercapture', drop);
   // Each press steps back one move: a tap, a drag, or a clear.
   const undoBtn = api.addAction('Undo', () => {
     if (api.isSolved() || !undo.length) return;

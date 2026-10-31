@@ -17,15 +17,22 @@ if ('serviceWorker' in navigator) {
   }).catch(() => {});
 }
 
-// iOS ignores the viewport zoom flags, so block double-tap and pinch zoom by hand.
+// The page never scrolls or zooms: only the game boards and buttons take touches. CSS sets
+// touch-action: none everywhere but the results list; these cover iOS, which ignores the
+// viewport zoom flags. Buttons are exempt from the double-tap guard so quick presses all count.
+const SCROLLS = '.card.wide';
 let lastTouchEnd = 0;
 document.addEventListener('touchend', (e) => {
   const now = Date.now();
-  if (now - lastTouchEnd < 320) e.preventDefault();
+  if (now - lastTouchEnd < 320 && !e.target.closest('button, select')) e.preventDefault();
   lastTouchEnd = now;
 }, { passive: false });
-document.addEventListener('gesturestart', (e) => e.preventDefault(), { passive: false });
-document.addEventListener('dblclick', (e) => e.preventDefault(), { passive: false });
+document.addEventListener('touchmove', (e) => {
+  if (e.touches.length > 1 || !e.target.closest(SCROLLS)) e.preventDefault();
+}, { passive: false });
+for (const t of ['gesturestart', 'gesturechange', 'dblclick', 'contextmenu', 'dragstart', 'selectstart']) {
+  document.addEventListener(t, (e) => e.preventDefault(), { passive: false });
+}
 
 const GAMES = [queens, tango, zip, patches];
 const $ = (s) => document.querySelector(s);

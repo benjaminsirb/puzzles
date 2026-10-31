@@ -266,7 +266,9 @@ export function mount(root, puzzle, api, saved) {
   }
   // Pointer events arrive at most once per frame, so a quick drag skips cells.
   // Walk the straight track from the previous sample and step through every cell it crosses.
-  let dragging = false, lastPt = null;
+  // Only the finger that started the drag drives it, so a stray touch never moves or cuts the path.
+  // A finger whose capture is gone (lost without a pointerup) no longer blocks a new one.
+  let dragging = false, lastPt = null, pid = null;
   function dragTo(p) {
     if (lastPt) {
       const dx = p.x - lastPt.x, dy = p.y - lastPt.y;
@@ -279,6 +281,8 @@ export function mount(root, puzzle, api, saved) {
   grid.addEventListener('pointerdown', (e) => {
     if (api.isSolved()) return;
     e.preventDefault();
+    if (pid !== null && grid.hasPointerCapture(pid)) return;
+    pid = e.pointerId;
     try { grid.setPointerCapture(e.pointerId); } catch {}
     dragging = true;
     const p = gridPoint(e), i = cellOf(p);
@@ -288,12 +292,12 @@ export function mount(root, puzzle, api, saved) {
     if (at >= 0) { path.length = at + 1; commit(); } else step(i);
   });
   grid.addEventListener('pointermove', (e) => {
-    if (!dragging || api.isSolved()) return;
+    if (!dragging || e.pointerId !== pid || api.isSolved()) return;
     const evs = typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : [];
     for (const ce of evs.length ? evs : [e]) dragTo(gridPoint(ce));
   });
-  const end = () => { dragging = false; lastPt = null; };
-  grid.addEventListener('pointerup', end); grid.addEventListener('pointercancel', end);
+  const end = (e) => { if (e.pointerId === pid) { pid = null; dragging = false; lastPt = null; } };
+  for (const t of ['pointerup', 'pointercancel', 'lostpointercapture']) grid.addEventListener(t, end);
   api.addAction('Clear', () => { if (api.isSolved()) return; path = []; commit(); });
   api.addAction('Hint', () => {
     if (api.isSolved()) return;

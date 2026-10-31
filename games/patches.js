@@ -286,9 +286,11 @@ export function mount(root, puzzle, api, saved) {
   let anchor = null, pid = null, armed = false;
   const cancel = () => { anchor = null; pid = null; armed = false; preview.style.display = 'none'; };
   grid.addEventListener('pointerdown', (e) => {
-    if (api.isSolved() || pid !== null) return;
+    if (api.isSolved()) return;
     e.preventDefault();
-    grid.setPointerCapture(e.pointerId);
+    if (pid !== null && grid.hasPointerCapture(pid)) return;
+    pid = null;
+    try { grid.setPointerCapture(e.pointerId); } catch {}
     pid = e.pointerId;
     armed = !!anchor;
     const [r, c] = cellAt(e);
@@ -322,6 +324,7 @@ export function mount(root, puzzle, api, saved) {
     if (ci >= 0) { patches.push({ ...rc, ci }); commit(); }
   });
   grid.addEventListener('pointercancel', (e) => { if (pid === null || e.pointerId === pid) cancel(); });
+  grid.addEventListener('lostpointercapture', (e) => { if (e.pointerId === pid) cancel(); });
   api.addAction('Clear', () => { if (api.isSolved()) return; patches = []; cancel(); commit(); });
   const cellEls = [...grid.children];
   api.addAction('Hint', () => {
