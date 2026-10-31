@@ -4,7 +4,7 @@ export const id = 'patches';
 export const name = 'Patches';
 export const levels = ['easy', 'medium', 'hard'];
 const SIZE = { easy: 5, medium: 6, hard: 7 };
-export const rules = 'Divide the grid into rectangles so every rectangle holds exactly one clue. The number is the area. The tile's outline is the shape: square, tall, wide, or a dashed plus for any rectangle. Drag from one corner to the opposite corner, or tap the two corners, to draw a patch. Tap a patch to remove it.';
+export const rules = 'Divide the grid into rectangles so every rectangle holds exactly one clue. The number is the area. The tile’s outline is the shape: square, tall, wide, or a dashed plus for any rectangle. Drag from one corner to the opposite corner, or tap the two corners, to draw a patch. Tap a patch to remove it.';
 
 // Soft mid-tones that carry white numerals; a placed patch shows a pale wash of its clue's colour.
 const PALETTE = ['#4ba35d', '#d5b864', '#dc6662', '#a58cf5', '#4296a8', '#e9a066', '#4fa9f0', '#4a7f40', '#e08a6f', '#d27aa8', '#7f8fd6', '#52b39a'];
