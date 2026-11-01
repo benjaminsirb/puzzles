@@ -8,8 +8,10 @@ export const rules = 'Fill the grid with suns and moons so each row and column h
 const N = 6;
 const SUN = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="#f5a623"/></svg>';
 const MOON = '<svg viewBox="0 0 24 24"><path d="M14.8 3.3a8.7 8.7 0 1 0 6 15.4 10.2 10.2 0 0 1-6-15.4z" fill="#5b7cc4"/></svg>';
-const EQ = '<svg viewBox="0 0 10 10"><path d="M1.5 3.3h7M1.5 6.7h7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
-const NE = '<svg viewBox="0 0 10 10"><path d="M2 2l6 6M8 2l-6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+// Each badge is one SVG: the ring and the sign share one centre, so the sign can never drift.
+const badge = (sign) => `<svg viewBox="0 0 20 20"><circle class="ring" cx="10" cy="10" r="9"/><path d="${sign}"/></svg>`;
+const EQ = badge('M6.6 8.2h6.8M6.6 11.8h6.8');
+const NE = badge('M7.3 7.3l5.4 5.4M12.7 7.3l-5.4 5.4');
 
 const makeCons = () => ({
   right: Array.from({ length: N }, () => new Array(N).fill(null)),
@@ -245,17 +247,19 @@ export function mount(root, puzzle, api, saved) {
   }
   const overlay = document.createElement('div');
   overlay.className = 'overlay';
+  // Cell lines sit inside the grid's border, so measure from its inner edge.
+  const at = (f) => `calc(var(--gb) + (100% - 2 * var(--gb)) * ${f})`;
   for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
     if (cons.right[r][c]) {
       const s = document.createElement('div');
       s.className = 'con'; s.innerHTML = cons.right[r][c] === 'eq' ? EQ : NE;
-      s.style.left = ((c + 1) / N) * 100 + '%'; s.style.top = ((r + 0.5) / N) * 100 + '%';
+      s.style.left = at((c + 1) / N); s.style.top = at((r + 0.5) / N);
       overlay.appendChild(s);
     }
     if (cons.down[r][c]) {
       const s = document.createElement('div');
       s.className = 'con'; s.innerHTML = cons.down[r][c] === 'eq' ? EQ : NE;
-      s.style.left = ((c + 0.5) / N) * 100 + '%'; s.style.top = ((r + 1) / N) * 100 + '%';
+      s.style.left = at((c + 0.5) / N); s.style.top = at((r + 1) / N);
       overlay.appendChild(s);
     }
   }
