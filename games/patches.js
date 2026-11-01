@@ -214,8 +214,6 @@ export function mount(root, puzzle, api, saved) {
   for (let i = 0; i < N; i++) {
     const d = document.createElement('div');
     d.className = 'cell';
-    if (i % n === n - 1) d.classList.add('lc');
-    if (i >= N - n) d.classList.add('lr');
     if (clueAt[i] >= 0) {
       const cl = clues[clueAt[i]];
       d.classList.add('cluecell');
@@ -229,6 +227,15 @@ export function mount(root, puzzle, api, saved) {
     }
     grid.appendChild(d);
   }
+  // Dashed cell lines are one SVG layer in percentages, not cell borders: dashed borders at
+  // fractional widths drop out in some browsers, while these render the same in both directions.
+  const lines = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  lines.setAttribute('class', 'lines');
+  for (let k = 1; k < n; k++) {
+    const p = (k / n) * 100 + '%';
+    lines.innerHTML += `<line x1="${p}" y1="0" x2="${p}" y2="100%"/><line x1="0" y1="${p}" x2="100%" y2="${p}"/>`;
+  }
+  grid.appendChild(lines);
   const overlay = document.createElement('div');
   overlay.className = 'overlay';
   const preview = document.createElement('div');
@@ -326,7 +333,7 @@ export function mount(root, puzzle, api, saved) {
   grid.addEventListener('pointercancel', (e) => { if (pid === null || e.pointerId === pid) cancel(); });
   grid.addEventListener('lostpointercapture', (e) => { if (e.pointerId === pid) cancel(); });
   api.addAction('Clear', () => { if (api.isSolved()) return; patches = []; cancel(); commit(); });
-  const cellEls = [...grid.children];
+  const cellEls = [...grid.querySelectorAll(':scope > .cell')];
   api.addAction('Hint', () => {
     if (api.isSolved()) return;
     const sol = puzzle.solution;

@@ -213,11 +213,11 @@ main { padding: 12px 16px calc(24px + env(safe-area-inset-bottom)); max-width: 5
 
 /* Patches: a white board with dashed cell lines; clues are soft coloured tiles shaped like their patch. */
 .patches { --pt-board: #ffffff; --pt-line: #cfd3d9; --pt-edge: #e3e5e9; background: var(--pt-board); border-radius: 14px; }
-@media (prefers-color-scheme: dark) { .patches { --pt-board: var(--cell); --pt-line: #444b59; --pt-edge: #3a404d; } }
+@media (prefers-color-scheme: dark) { .patches { --pt-board: var(--cell); --pt-line: #565e6e; --pt-edge: #3a404d; } }
 .patches .grid { position: relative; z-index: 1; background: transparent; border: 2.5px solid var(--pt-edge); border-radius: 14px; overflow: hidden; }
-.patches .cell { border: 0; border-right: 1.5px dashed var(--pt-line); border-bottom: 1.5px dashed var(--pt-line); }
-.patches .cell.lc { border-right: 0; }
-.patches .cell.lr { border-bottom: 0; }
+.patches .cell { border: 0; }
+.patches .lines { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+.patches .lines line { stroke: var(--pt-line); stroke-width: 1.5; stroke-dasharray: 4.5 4.5; }
 .patches .overlay { z-index: 0; }
 .patches .ptile {
   position: relative; display: flex; align-items: center; justify-content: center;

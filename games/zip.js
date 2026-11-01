@@ -211,15 +211,53 @@ export function mount(root, puzzle, api, saved) {
   svg.appendChild(line); svg.appendChild(head);
   wrap.appendChild(grid); wrap.appendChild(svg); root.appendChild(wrap);
 
+  // The drawn line glides: `shown` (how many cells of `track` are drawn, fractional) eases toward
+  // the path length each frame, so the line slides into a new cell and backs out of an erased one
+  // along the route it came. The game state itself always uses `path` and never waits for this.
+  const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let track = path.slice(), shown = path.length, raf = 0, lastT = 0;
+  const ctr = (i) => [(i % n) + 0.5, Math.floor(i / n) + 0.5];
+  function draw() {
+    const k = Math.floor(shown), f = shown - k;
+    const pts = track.slice(0, k).map(ctr);
+    if (f > 0 && k > 0 && k < track.length) {
+      const [ax, ay] = ctr(track[k - 1]), [bx, by] = ctr(track[k]);
+      pts.push([ax + (bx - ax) * f, ay + (by - ay) * f]);
+    }
+    line.setAttribute('points', pts.map((q) => q.join(',')).join(' '));
+    if (pts.length) {
+      const [hx, hy] = pts[pts.length - 1];
+      head.setAttribute('cx', hx); head.setAttribute('cy', hy); head.style.display = '';
+    } else head.style.display = 'none';
+  }
+  function frame(t) {
+    const dt = lastT ? Math.min(t - lastT, 50) : 16;
+    lastT = t;
+    const target = path.length, gap = target - shown;
+    // Catch up in proportion to the lag, and never slower than one cell per 90 ms.
+    const move = Math.max(Math.abs(gap) * (1 - Math.exp(-dt / 50)), dt / 90);
+    shown = Math.abs(gap) <= move ? target : shown + Math.sign(gap) * move;
+    if (shown === target) track = path.slice();
+    draw();
+    raf = shown === target ? 0 : requestAnimationFrame(frame);
+  }
+  function follow() {
+    let common = 0;
+    while (common < track.length && common < path.length && track[common] === path[common]) common++;
+    if (common === track.length) track = path.slice();                      // grew (or unchanged)
+    else if (common < path.length) { track = path.slice(); shown = Math.min(shown, common); } // turned off the old route
+    // otherwise it shrank: keep the old track so the line backs out along it
+    if (still || !path.length) { track = path.slice(); shown = path.length; }
+    if (path.length && shown < 1) shown = 1;
+    draw();
+    if (!raf) { lastT = 0; raf = requestAnimationFrame(frame); }
+  }
+
   const inPath = new Uint8Array(N);
   function render() {
     inPath.fill(0);
     for (const i of path) inPath[i] = 1;
-    line.setAttribute('points', path.map((i) => `${(i % n) + 0.5},${Math.floor(i / n) + 0.5}`).join(' '));
-    if (path.length) {
-      const h = path[path.length - 1];
-      head.setAttribute('cx', (h % n) + 0.5); head.setAttribute('cy', Math.floor(h / n) + 0.5); head.style.display = '';
-    } else head.style.display = 'none';
+    follow();
     for (let i = 0; i < N; i++) { const s = cells[i].firstChild; if (s) s.classList.toggle('hit', !!inPath[i]); }
     return path.length === N;
   }
