@@ -211,14 +211,41 @@ export function mount(root, puzzle, api, saved) {
   svg.appendChild(line); svg.appendChild(head);
   wrap.appendChild(grid); wrap.appendChild(svg); root.appendChild(wrap);
 
-  // The drawn line glides: `shown` (how many cells of `track` are drawn, fractional) eases toward
-  // the path length each frame, so the line slides into a new cell and backs out of an erased one
-  // along the route it came. The game state itself always uses `path` and never waits for this.
+  // The drawn line follows the finger. While dragging, its tip reaches from the head toward the
+  // finger: forward into the next cell when that step is legal, or back toward the previous cell
+  // when retracing, so the line moves with the finger instead of jumping a cell at a time. `pos`
+  // is how far along `track` the line is drawn, in cells; `track` may hold one cell past the path
+  // (where the tip is heading). Jumps that no finger drives (a tap that cuts the path, Clear,
+  // Undo) ease instead. The game state always uses `path` and never waits for the drawing.
   const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  let track = path.slice(), shown = path.length, raf = 0, lastT = 0;
+  let track = path.slice(), pos = path.length, raf = 0, lastT = 0;
   const ctr = (i) => [(i % n) + 0.5, Math.floor(i / n) + 0.5];
+  function tip() {
+    if (!dragging || !lastPt || !path.length) return { s: 0 };
+    const h = path[path.length - 1], hr = Math.floor(h / n), hc = h % n;
+    const dx = lastPt.x - (hc + 0.5), dy = lastPt.y - (hr + 0.5);
+    const across = Math.abs(dx) >= Math.abs(dy), d = across ? dx : dy, dir = Math.sign(d);
+    if (Math.abs(d) < 0.08) return { s: 0 }; // a resting finger draws no tip
+    const nr = across ? hr : hr + dir, nc = across ? hc + dir : hc;
+    if (nr < 0 || nc < 0 || nr >= n || nc >= n) return { s: 0 };
+    const nb = nr * n + nc, mag = Math.min(Math.abs(d), 0.95);
+    if (path.length > 1 && nb === path[path.length - 2]) return { s: -mag };
+    return canStep(h, nb) ? { s: mag, nb } : { s: 0 };
+  }
+  let goal = { track: path.slice(), at: path.length };
+  function aim() {
+    const t = tip();
+    goal = { track: t.nb !== undefined ? path.concat(t.nb) : path.slice(), at: path.length + t.s };
+    let common = 0;
+    while (common < track.length && common < goal.track.length && track[common] === goal.track[common]) common++;
+    if (common === track.length) track = goal.track.slice();                       // grew or same
+    else if (common < goal.track.length) { track = goal.track.slice(); pos = Math.min(pos, common); } // new route
+    // otherwise it shrank: keep the old track so the line backs out along it
+    if (still || !path.length) { track = goal.track.slice(); pos = goal.at; }
+    if (path.length && pos < 1) pos = 1;
+  }
   function draw() {
-    const k = Math.floor(shown), f = shown - k;
+    const k = Math.floor(pos), f = pos - k;
     const pts = track.slice(0, k).map(ctr);
     if (f > 0 && k > 0 && k < track.length) {
       const [ax, ay] = ctr(track[k - 1]), [bx, by] = ctr(track[k]);
@@ -233,23 +260,16 @@ export function mount(root, puzzle, api, saved) {
   function frame(t) {
     const dt = lastT ? Math.min(t - lastT, 50) : 16;
     lastT = t;
-    const target = path.length, gap = target - shown;
-    // Catch up in proportion to the lag, and never slower than one cell per 90 ms.
-    const move = Math.max(Math.abs(gap) * (1 - Math.exp(-dt / 50)), dt / 90);
-    shown = Math.abs(gap) <= move ? target : shown + Math.sign(gap) * move;
-    if (shown === target) track = path.slice();
+    const gap = goal.at - pos;
+    // A finger-sized change lands at once; a bigger jump eases, never slower than a cell per 90 ms.
+    const move = Math.abs(gap) <= 0.75 ? Math.abs(gap) : Math.max(Math.abs(gap) * (1 - Math.exp(-dt / 50)), dt / 90);
+    pos = Math.abs(gap) <= move ? goal.at : pos + Math.sign(gap) * move;
+    if (pos === goal.at) track = goal.track.slice();
     draw();
-    raf = shown === target ? 0 : requestAnimationFrame(frame);
+    raf = pos === goal.at ? 0 : requestAnimationFrame(frame);
   }
   function follow() {
-    let common = 0;
-    while (common < track.length && common < path.length && track[common] === path[common]) common++;
-    if (common === track.length) track = path.slice();                      // grew (or unchanged)
-    else if (common < path.length) { track = path.slice(); shown = Math.min(shown, common); } // turned off the old route
-    // otherwise it shrank: keep the old track so the line backs out along it
-    if (still || !path.length) { track = path.slice(); shown = path.length; }
-    if (path.length && shown < 1) shown = 1;
-    draw();
+    aim();
     if (!raf) { lastT = 0; raf = requestAnimationFrame(frame); }
   }
 
@@ -333,8 +353,9 @@ export function mount(root, puzzle, api, saved) {
     if (!dragging || e.pointerId !== pid || api.isSolved()) return;
     const evs = typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : [];
     for (const ce of evs.length ? evs : [e]) dragTo(gridPoint(ce));
+    follow();
   });
-  const end = (e) => { if (e.pointerId === pid) { pid = null; dragging = false; lastPt = null; } };
+  const end = (e) => { if (e.pointerId === pid) { pid = null; dragging = false; lastPt = null; follow(); } };
   for (const t of ['pointerup', 'pointercancel', 'lostpointercapture']) grid.addEventListener(t, end);
   api.addAction('Clear', () => { if (api.isSolved()) return; path = []; commit(); });
   api.addAction('Hint', () => {
