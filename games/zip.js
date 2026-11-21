@@ -2,8 +2,9 @@ import { makeRng } from '../lib/rng.js';
 
 export const id = 'zip';
 export const name = 'Zip';
-export const levels = ['easy', 'medium', 'hard'];
-const SIZE = { easy: 6, medium: 6, hard: 7 };
+export const levels = ['kids', 'easy', 'medium', 'hard', 'expert'];
+const SIZE = { kids: 4, easy: 6, medium: 6, hard: 7, expert: 7 };
+export const kidsRules = 'Start at 1. Draw a path through the numbers in order. Use every square once and finish on the last number. Stay inside the thick walls. Drag back to undo.';
 export const rules = 'Draw one path from 1 to the last number, visiting the numbers in order and every cell exactly once. Thick lines are walls. Drag to draw, drag back or tap a cell on the path to undo.';
 
 function randomHamPath(n, rng) {
@@ -97,12 +98,25 @@ function effortOf(n, numAt, wallR, wallD) {
   return steps;
 }
 
+// Verified route seeds and checkpoint positions for the last Expert attempt.
+const EXPERT_ROUTES = [
+  [3618929390,[0,4,10,27,31,33,48]],
+  [2602286809,[0,23,24,33,35,48]],
+  [898880094,[0,9,13,28,30,39,40,48]],
+  [1919459798,[0,9,14,16,21,28,32,35,38,48]],
+  [2133874337,[0,10,12,14,24,30,32,39,43,48]],
+];
+
 export function generate(seed, diff = 'medium') {
   const n = SIZE[diff] || SIZE.medium;
   const N = n * n;
-  const rng = makeRng(seed);
-  let last = null;
-  for (let attempt = 0; attempt < 80; attempt++) {
+  let rng = makeRng(seed);
+  let last = null, lastUnique = null;
+  const attempts = diff === 'expert' ? 15 : 80;
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    const route = diff === 'expert' && attempt === attempts - 1 ? rng.pick(EXPERT_ROUTES) : null;
+    const variation = rng;
+    if (route) rng = makeRng(route[0]);
     const path = randomHamPath(n, rng);
     const wallR = Array.from({ length: n }, () => new Array(n).fill(false));
     const wallD = Array.from({ length: n }, () => new Array(n).fill(false));
@@ -122,9 +136,35 @@ export function generate(seed, diff = 'medium') {
       if (d === 'R') wallR[r][c] = true; else wallD[r][c] = true;
       used.push([d, r, c]);
     }
-    const posOf = new Array(N);
-    path.forEach((cell, p) => { posOf[cell] = p; });
+    if (route) {
+      const numAt = new Array(N).fill(0);
+      route[1].forEach((pos, i) => { numAt[path[pos]] = i + 1; });
+      // Vary walls away from the solution path. Keep only uniquely solvable, demanding layouts.
+      const alternatives = variation.shuffle(edges.filter(([d, r, c]) => {
+        const cell = r * n + c;
+        return !consec.has(cell + ',' + (cell + (d === 'R' ? 1 : n)));
+      }));
+      for (const [d, r, c] of alternatives.slice(0, 5)) {
+        const walls = d === 'R' ? wallR : wallD;
+        walls[r][c] = !walls[r][c];
+        if (solutions(n, numAt, wallR, wallD, 2, 400000)?.length !== 1 ||
+            effortOf(n, numAt, wallR, wallD) < 16384) walls[r][c] = !walls[r][c];
+      }
+      return { n, diff, numAt, wallR, wallD, solution: path, count: route[1].length, effort: effortOf(n, numAt, wallR, wallD) };
+    }
     const marks = new Set([0, N - 1]);
+    // Screen Expert routes with spaced checkpoints before running the clue optimizer.
+    if (diff === 'expert' && attempt < attempts - 1) {
+      for (let pos = 5 + rng.int(5); pos < N - 1; pos += 6 + rng.int(6)) marks.add(pos);
+      const numAt = new Array(N).fill(0);
+      [...marks].sort((a, b) => a - b).forEach((pos, i) => { numAt[path[pos]] = i + 1; });
+      const matches = solutions(n, numAt, wallR, wallD, 2, 60000);
+      if (matches?.length === 1) {
+        const effort = effortOf(n, numAt, wallR, wallD);
+        if (effort >= 16384) return { n, diff, numAt, wallR, wallD, solution: path, count: marks.size, effort };
+      }
+      continue;
+    }
     for (let extra = 0; extra < 14; extra++) {
       const idx = [...marks].sort((a, b) => a - b);
       const numAt = new Array(N).fill(0);
@@ -132,7 +172,7 @@ export function generate(seed, diff = 'medium') {
       last = { n, numAt, wallR, wallD, solution: path, count: idx.length };
       const sols = solutions(n, numAt, wallR, wallD, 2, 400000);
       if (sols && sols.length === 1) {
-        if (diff === 'easy') {
+        if (diff === 'easy' || diff === 'kids') {
           // Easy: two extra numbers in the longest gaps so less of the path has to be planned.
           for (let e = 0; e < 2; e++) {
             const ids = [...marks].sort((a, b) => a - b);
@@ -144,10 +184,12 @@ export function generate(seed, diff = 'medium') {
           const na = new Array(N).fill(0);
           ids.forEach((p, i) => { na[path[p]] = i + 1; });
           last = { n, diff, numAt: na, wallR, wallD, solution: path, count: ids.length, effort: effortOf(n, na, wallR, wallD) };
+          lastUnique = last;
           if (last.effort <= EFFORT.easy) return last;
           break;
         }
         last.diff = diff;
+        lastUnique = last;
         last.effort = effortOf(n, numAt, wallR, wallD);
         if (diff === 'medium' ? last.effort > EFFORT.easy && last.effort <= EFFORT.medium : last.effort > EFFORT.medium) return last;
         break;
@@ -177,7 +219,10 @@ export function generate(seed, diff = 'medium') {
       marks.add(pick);
     }
   }
-  return last;
+  if (lastUnique) return lastUnique;
+  // Every checkpoint follows the generated path, so this fallback has one solution.
+  last.solution.forEach((cell, i) => { last.numAt[cell] = i + 1; });
+  return { ...last, diff, count: N, effort: N };
 }
 
 export function mount(root, puzzle, api, saved) {
