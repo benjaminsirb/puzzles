@@ -240,7 +240,9 @@ export function mount(root, puzzle, api, saved) {
   overlay.className = 'overlay';
   const preview = document.createElement('div');
   preview.className = 'preview'; preview.style.display = 'none';
-  wrap.appendChild(grid); wrap.appendChild(overlay); wrap.appendChild(preview); root.appendChild(wrap);
+  // Position both layers against the same inner bounds as the cells.
+  grid.append(overlay, preview);
+  wrap.appendChild(grid); root.appendChild(wrap);
 
   const place = (el, rc) => {
     el.style.left = (rc.c / n) * 100 + '%'; el.style.top = (rc.r / n) * 100 + '%';
