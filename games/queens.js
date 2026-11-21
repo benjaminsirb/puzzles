@@ -2,8 +2,9 @@ import { makeRng } from '../lib/rng.js';
 
 export const id = 'queens';
 export const name = 'Queens';
-export const levels = ['easy', 'medium', 'hard'];
-const SIZE = { easy: 7, medium: 8, hard: 9 };
+export const levels = ['kids', 'easy', 'medium', 'hard', 'expert'];
+const SIZE = { kids: 5, easy: 7, medium: 8, hard: 9, expert: 10 };
+export const kidsRules = 'Put one queen in each colour. Each row and column needs one queen too. Leave space between queens, even at the corners. Tap once for an X and again for a queen.';
 export const rules = 'Place exactly one queen in each row, column and colour region. Queens never touch, not even diagonally. Tap a cell once for an X and twice for a queen.';
 
 const PALETTE = ['#f7b8b8', '#fbd59f', '#f8f1a0', '#bfe8b5', '#aee0ee', '#c3c6f5', '#e8bdee', '#dccfbd', '#b2e8d6', '#f5c3df'];
@@ -225,16 +226,23 @@ function grade(n, region) {
 }
 
 const FITS = {
+  kids: (g) => g.level === 1,
+  expert: (g) => g.level === 5,
   easy: (g) => g.level <= 2,
   medium: (g) => g.level === 3 || (g.level === 4 && g.deep <= 2),
   hard: (g) => g.level === 4 && g.deep >= 3,
 };
 
+// Verified starting points for the final attempt keep Expert generation bounded on phones.
+const EXPERT_FALLBACK = [3486839189, 991631123, 1349458413, 1671422892, 1967384218, 3491412725, 2830066660, 1525302926, 1636960417, 4272181862, 2341865498, 2911557705];
+
 export function generate(seed, diff = 'medium') {
   const n = SIZE[diff] || SIZE.medium;
-  const rng = makeRng(seed);
+  let rng = makeRng(seed);
   let last = null;
-  for (let t = 0; t < 400; t++) {
+  const attempts = diff === 'expert' ? 12 : 400;
+  for (let t = 0; t < attempts; t++) {
+    if (diff === 'expert' && t === attempts - 1) rng = makeRng(rng.pick(EXPERT_FALLBACK));
     const cols = placeQueens(n, rng);
     const region = growRegions(n, cols, rng);
     if (!repair(n, region, cols, rng)) continue;

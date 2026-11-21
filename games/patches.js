@@ -2,8 +2,9 @@ import { makeRng } from '../lib/rng.js';
 
 export const id = 'patches';
 export const name = 'Patches';
-export const levels = ['easy', 'medium', 'hard'];
-const SIZE = { easy: 5, medium: 6, hard: 7 };
+export const levels = ['kids', 'easy', 'medium', 'hard', 'expert'];
+const SIZE = { kids: 4, easy: 5, medium: 6, hard: 7, expert: 8 };
+export const kidsRules = 'Make a box around each number. A 4 needs four squares. Match the shape of the number tile. Tap two opposite corners to make the box. Fill the board. Tap a box to erase it.';
 export const rules = 'Divide the grid into rectangles so every rectangle holds exactly one clue. The number is the area. The tile’s outline is the shape: square, tall, wide, or a dashed plus for any rectangle. Drag from one corner to the opposite corner, or tap the two corners, to draw a patch. Tap a patch to remove it.';
 
 // Soft mid-tones that carry white numerals; a placed patch shows a pale wash of its clue's colour.
@@ -155,6 +156,8 @@ function grade(n, clues) {
 }
 
 const PARAMS = {
+  kids: { maxArea: 4, stop: 0.35, small: 8, minRects: 4, maxRects: 8, show: 1 },
+  expert: { maxArea: 10, stop: 0.3, small: 8, minRects: 13, maxRects: 21, show: 0 },
   easy: { maxArea: 9, stop: 0.15, small: 2, minRects: 4, maxRects: 8, show: 0.7 },
   medium: { maxArea: 8, stop: 0.3, small: 4, minRects: 8, maxRects: 12, show: 0.15 },
   hard: { maxArea: 8, stop: 0.3, small: 5, minRects: 10, maxRects: 14, show: 0.1 },
@@ -162,17 +165,24 @@ const PARAMS = {
 // Shikaku is solved by spotting forced cells, so difficulty is how many passes of deduction it takes
 // and how few clues start with a single placement.
 const FITS = {
+  kids: (g) => g.level === 1 && g.rounds <= 2,
+  expert: (g) => g.level === 3 || g.deep >= 3 || g.rounds >= 7,
   easy: (g, k) => g.level === 1 && g.rounds <= 2 && g.gimmes / k >= 0.35,
   medium: (g) => g.level === 1 && g.rounds === 3,
   hard: (g) => (g.level === 1 && g.rounds >= 4) || (g.level === 2 && g.deep <= 2),
 };
 export { grade as _grade, partition as _partition, countSolutions as _count, shapeOf as _shape };
 
+// Verified starting points for the final attempt keep Expert generation bounded on phones.
+const EXPERT_FALLBACK = [2914232437, 438864389, 1811372916, 2896991792, 3423857229, 738276431, 3931304926, 3550843775, 656444541, 3765730312, 1277423650, 616941765];
+
 export function generate(seed, diff = 'medium') {
   const n = SIZE[diff] || SIZE.medium;
-  const rng = makeRng(seed);
+  let rng = makeRng(seed);
   let last = null;
-  for (let attempt = 0; attempt < 3000; attempt++) {
+  const attempts = diff === 'expert' ? 750 : 3000;
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    if (diff === 'expert' && attempt === attempts - 1) rng = makeRng(rng.pick(EXPERT_FALLBACK));
     const P = PARAMS[diff] || PARAMS.medium;
     const rects = partition(n, rng, P.maxArea, P.stop);
     const singles = rects.filter((x) => x.h * x.w === 1).length;

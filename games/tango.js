@@ -2,7 +2,8 @@ import { makeRng } from '../lib/rng.js';
 
 export const id = 'tango';
 export const name = 'Tango';
-export const levels = ['easy', 'medium', 'hard'];
+export const levels = ['kids', 'easy', 'medium', 'hard', 'expert'];
+export const kidsRules = 'Tap an empty square to pick a sun or a moon. Each row and column needs three of each. Keep runs to one or two alike. An = joins twins. A × joins a sun and a moon.';
 export const rules = 'Fill the grid with suns and moons so each row and column holds three of each. No more than two of the same symbol may sit next to each other. Cells joined by = match; cells joined by × differ. Tap to cycle a cell.';
 
 const N = 6;
@@ -187,15 +188,22 @@ function gradeStep(g, cons) {
 }
 
 const FITS = {
+  kids: (g) => g.level === 1,
+  expert: (g) => g.level === 3,
   easy: (g) => g.level === 1,
   medium: (g) => g.level === 2 && g.deep <= 3,
   hard: (g) => g.level === 2 && g.deep >= 4,
 };
 
+// Verified starting points for the final attempt keep Expert generation bounded on phones.
+const EXPERT_FALLBACK = [395140958, 1811511657, 939391827, 1750573232, 2349687612, 632422354, 1171771665, 3210641697, 3578221574, 1351514804, 1827181570, 3065449268];
+
 export function generate(seed, diff = 'medium') {
-  const rng = makeRng(seed);
+  let rng = makeRng(seed);
   let last = null;
-  for (let t = 0; t < 300; t++) {
+  const attempts = diff === 'expert' ? 20 : 300;
+  for (let t = 0; t < attempts; t++) {
+    if (diff === 'expert' && t === attempts - 1) rng = makeRng(rng.pick(EXPERT_FALLBACK));
     const full = fillRandom(rng);
     const cons = makeCons();
     const pairs = [];
@@ -213,7 +221,10 @@ export function generate(seed, diff = 'medium') {
     const given = full.slice();
     const order = rng.shuffle([...Array(N * N).keys()]);
     for (const i of order) { const v = given[i]; given[i] = 0; if (countSolutions(given, cons) !== 1) given[i] = v; }
-    if (diff === 'easy') {
+    if (diff === 'kids') {
+      for (const i of order.slice(0, 24)) given[i] = full[i];
+    }
+    if (diff === 'easy' || diff === 'kids') {
       // Add givens back until direct rules alone solve it.
       for (const i of order) {
         const g = grade(given, cons);

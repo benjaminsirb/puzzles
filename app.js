@@ -51,7 +51,7 @@ let celebrateTimer = null;
 
 const key = (id) => 'puzzles.' + id;
 const randomSeed = () => Math.floor(Math.random() * 2 ** 31);
-const LEVELS = ['easy', 'medium', 'hard'];
+const LEVELS = ['kids', 'easy', 'medium', 'hard', 'expert'];
 const label = (d) => d.charAt(0).toUpperCase() + d.slice(1);
 function load(id) { try { const s = localStorage.getItem(key(id)); return s ? JSON.parse(s) : null; } catch { return null; } }
 function save() {
@@ -164,7 +164,7 @@ function newPuzzle(game, seed, diff, saved, replay, ready, shared) {
   };
   els.board.innerHTML = ''; els.actions.innerHTML = ''; els.hintmsg.hidden = true;
   els.board.classList.toggle('solved', current.solved);
-  els.rules.textContent = game.rules;
+  els.rules.textContent = diff === 'kids' ? game.kidsRules : game.rules;
   els.seed.textContent = replay
     ? 'Replay · solved in ' + fmt(replay.ms) + ' on ' + new Date(replay.at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' · #' + seed
     : '#' + seed + ' · ' + label(diff) + sharedNote();
@@ -331,10 +331,10 @@ function prefetch(game) {
   setTimeout(() => { if (!prefetched[game.id] || prefetched[game.id].diff !== diff) prefetched[game.id] = { seed, diff, puzzle: game.generate(seed, diff) }; }, 60);
 }
 function takePrefetched(game) {
-  const diff = resolveDiff(game);
+  const mode = diffMode(game);
   const p = prefetched[game.id];
   delete prefetched[game.id];
-  return p && p.diff === diff ? p : { seed: randomSeed(), diff, puzzle: null };
+  return p && (mode === 'random' || p.diff === mode) ? p : { seed: randomSeed(), diff: resolveDiff(game), puzzle: null };
 }
 // New starts at once; the Start card only greets arrivals from the home page.
 els.newBtn.onclick = () => { const p = takePrefetched(current.game); newPuzzle(current.game, p.seed, p.diff, null, null, p.puzzle); uncover(); };
